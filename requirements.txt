@@ -1,0 +1,9 @@
+numpy
+scipy
+gmsh
+matplotlib
+jupyterlab
+pytest
+numba
+line_profiler
+memory_profiler
