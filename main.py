@@ -1,9 +1,11 @@
-from src.mesh import Mesh, plot_mesh
+from fvm_mesh.polymesh.core_mesh import CoreMesh
+from fvm_mesh.polymesh.poly_mesh import PolyMesh
+from fvm_mesh.polymesh.local_mesh import LocalMesh
+
 from src.solver import solve
-from src.case_setup import setup_case_shallow_water, setup_case_euler
+from src.case_setup import setup_case_euler
 from src.visualization import plot_simulation_step, create_animation
 from src.euler_equations import EulerEquations
-from src.shallow_water_equations import ShallowWaterEquations
 
 
 def main():
@@ -19,26 +21,18 @@ def main():
 
     # --- 1. Initialize and Read Mesh ---
     print("Initializing and reading mesh...")
-    mesh = Mesh()
-    mesh.read_mesh("data/euler_mesh.msh")
+    mesh = PolyMesh.from_gmsh()
+    mesh("data/euler_mesh.msh")
     mesh.analyze_mesh()
     mesh.summary()
     # plot_mesh(mesh)  # Optional: Uncomment to visualize the mesh and check normals
 
     # --- 2. Set Up Case ---
     print("Setting up the simulation case...")
-    equation_type = "euler"  # Choose 'shallow_water' or 'euler'
 
-    if equation_type == "shallow_water":
-        U_init, bc_dict = setup_case_shallow_water(mesh)
-        equation = ShallowWaterEquations(g=9.81)
-        t_end = 20
-    elif equation_type == "euler":
-        U_init, bc_dict = setup_case_euler(mesh)
-        equation = EulerEquations(gamma=1.4)
-        t_end = 0.25
-    else:
-        raise ValueError("Invalid equation type specified.")
+    U_init, bc_dict = setup_case_euler(mesh)
+    equation = EulerEquations(gamma=1.4)
+    t_end = 0.25
 
     # --- 3. Solve ---
     print("Starting the FVM solver...")
