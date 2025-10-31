@@ -66,7 +66,7 @@ def setup_case_shallow_water(mesh: Mesh):
     return U, boundary_conditions
 
 
-def setup_case_euler(mesh: Mesh, gamma=1.4):
+def setup_case_euler(mesh: Mesh, comm, gamma=1.4):
     """
     Sets up the initial conditions for a 2D Riemann problem for the Euler equations.
     The domain is split into four quadrants, each with a different initial state,
@@ -113,13 +113,12 @@ def setup_case_euler(mesh: Mesh, gamma=1.4):
     # Assemble the state vector U = [rho, rho*u, rho*v, E]
     U = np.vstack([rho, rho * u, rho * v, energy]).T
 
-    # Define boundary conditions - using transmissive (outlet) for all boundaries
-    # is common for this type of Riemann problem.
+    # Define boundary conditions for 'rod tube' example
+    # Assuming 'inlet', 'outlet', and 'wall' are physical group names defined in the mesh.
     boundary_conditions: Dict[str, Dict[str, Union[str, float, bool]]] = {
-        "top": {"type": "transmissive"},
-        "bottom": {"type": "transmissive"},
-        "left": {"type": "transmissive"},
-        "right": {"type": "transmissive"},
+        "inlet": {"type": "supersonic_inlet", "rho": 1.0, "u": 2.0, "v": 0.0, "p": 1.0},
+        "outlet": {"type": "transmissive"},
+        "wall": {"type": "slip_wall"},
     }
 
     return U, boundary_conditions

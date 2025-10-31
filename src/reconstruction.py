@@ -1,4 +1,5 @@
 import numpy as np
+from mpi4py import MPI
 from src.mesh import Mesh
 from src.euler_equations import EulerEquations  # Import the jitclass
 from src.boundary import create_numba_bcs
@@ -36,7 +37,7 @@ LIMITERS = {
 @profile
 @numba.njit(parallel=True)
 def compute_gradients_gaussian(
-    nelem,
+    num_cells,
     nvars,
     cell_neighbors,
     face_normals,
@@ -63,8 +64,8 @@ def compute_gradients_gaussian(
     Returns:
         np.ndarray: The gradients of the state variables at each cell centroid.
     """
-    gradients = np.zeros((nelem, nvars, 2))
-    for i in prange(nelem):
+    gradients = np.zeros((num_cells, nvars, 2))
+    for i in prange(num_cells):
         grad_sum = np.zeros((nvars, 2))
         for j, neighbor_idx in enumerate(cell_neighbors[i]):
             face_normal = face_normals[i, j]
@@ -112,7 +113,7 @@ def compute_gradients_gaussian(
 @profile
 @numba.njit(parallel=True)
 def compute_limiters(
-    nelem,
+    num_cells,
     nvars,
     cell_neighbors,
     face_midpoints,
@@ -137,9 +138,9 @@ def compute_limiters(
     Returns:
         np.ndarray: The limiter values (phi) for each cell and variable.
     """
-    limiters = np.ones((nelem, nvars))
+    limiters = np.ones((num_cells, nvars))
     limiter_func = barth_jespersen_limiter
-    for i in prange(nelem):
+    for i in prange(num_cells):
         neighbors = cell_neighbors[i]
         nfaces = neighbors.shape[0]
         U_i = U[i]
@@ -180,7 +181,8 @@ def compute_limiters(
 @profile
 @numba.njit(parallel=True)
 def compute_residual_flux_loop(
-    nelem,
+    num_owned_cells,
+    num_cells,
     nvars,
     cell_neighbors,
     face_normals,
@@ -226,8 +228,8 @@ def compute_residual_flux_loop(
     Returns:
         np.ndarray: The residual array for all cells.
     """
-    residual = np.zeros((nelem, nvars))
-    for i in prange(nelem):
+    residual = np.zeros((num_owned_cells, nvars))
+    for i in prange(num_owned_cells):
         flux_sum = np.zeros(nvars)
         for j, neighbor_idx in enumerate(cell_neighbors[i]):
             face_normal = face_normals[i, j, 0:2]
@@ -300,16 +302,22 @@ def compute_residual(
     U: np.ndarray,
     equation,
     bcs_array,
+    comm,
     limiter_type: str,
     flux_type: str,
     over_relaxation: float = 1.2,
 ) -> np.ndarray:
     nvars = U.shape[1]
 
+    # --- Exchange ghost cell data ---
+    # This is a placeholder. The actual implementation will depend on fvm_mesh's API for ghost cell exchange.
+    # For example: U = mesh.exchange_ghost_cells(U, comm) or similar.
+    # For now, we assume U already contains ghost cell data or that the mesh object handles it internally.
+
     # --- 1. Gradient Computation ---
     # Gradients are computed at cell centroids and used for second-order reconstruction.
     gradients = compute_gradients_gaussian(
-        mesh.nelem,
+        mesh.num_cells,
         nvars,
         mesh.cell_neighbors,
         mesh.face_normals,
@@ -325,7 +333,7 @@ def compute_residual(
     # Limiters are applied to the gradients to ensure monotonicity and prevent oscillations.
     limiter_func = LIMITERS.get(limiter_type, barth_jespersen_limiter)
     limiters = compute_limiters(
-        mesh.nelem,
+        mesh.num_cells,
         nvars,
         mesh.cell_neighbors,
         mesh.face_midpoints,
@@ -339,7 +347,8 @@ def compute_residual(
     # This loop iterates through each cell, calculates the fluxes on its faces,
     # and aggregates them to compute the residual for that cell.
     residual = compute_residual_flux_loop(
-        mesh.nelem,
+        mesh.num_owned_cells,
+        mesh.num_cells,
         nvars,
         mesh.cell_neighbors,
         mesh.face_normals,

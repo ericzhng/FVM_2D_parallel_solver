@@ -139,10 +139,8 @@ class EulerEquations:
         return self._prim_to_cons(P_ghost)
 
     def apply_boundary_condition(self, U_inside, normal, bc_type, bc_value):
-        # "inlet": 1
-        # "outlet": 2
-        # "wall": 3
-        # "transmissive": 4
+        # "supersonic_inlet": 5
+        # "slip_wall": 6
         if bc_type == 1:
             U_inside[1] = bc_value[0]
             U_inside[2] = bc_value[1]
@@ -154,6 +152,12 @@ class EulerEquations:
             return self._apply_wall_bc(U_inside, normal)
         elif bc_type == 4:
             return U_inside
+        elif bc_type == 5:  # Supersonic Inlet
+            rho_bc, u_bc, v_bc, p_bc = bc_value
+            P_bc = np.array([rho_bc, u_bc, v_bc, p_bc])
+            return self._prim_to_cons(P_bc)
+        elif bc_type == 6:  # Slip Wall
+            return self._apply_wall_bc(U_inside, normal) # _apply_wall_bc already implements slip wall behavior
         else:
             raise ValueError("Invalid boundary condition type")
 
