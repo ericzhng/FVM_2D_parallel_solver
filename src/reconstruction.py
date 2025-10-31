@@ -1,12 +1,9 @@
-import numpy as np
-from mpi4py import MPI
-from src.mesh import Mesh
-from src.euler_equations import EulerEquations  # Import the jitclass
-from src.boundary import create_numba_bcs
-
 import numba
 from numba import prange
 from line_profiler import profile
+
+import numpy as np
+from fvm_mesh.polymesh.local_mesh import LocalMesh
 
 
 # --- Limiter Functions (JIT-compiled for performance) ---
@@ -45,6 +42,7 @@ def compute_gradients_gaussian(
     cell_centroids,
     cell_volumes,
     face_to_cell_distances,
+    face_midpoints,
     U,
     over_relaxation,
 ):
@@ -72,7 +70,9 @@ def compute_gradients_gaussian(
             face_area = face_areas[i, j]
 
             if neighbor_idx != -1:
-                d_i, d_j = face_to_cell_distances[i, j]
+                d_i = face_to_cell_distances[i, j]
+                face_midpoint = face_midpoints[i, j]
+                d_j = np.linalg.norm(face_midpoint - cell_centroids[neighbor_idx])
 
                 if d_i + d_j > 1e-9:
                     w_i = d_j / (d_i + d_j)
@@ -194,11 +194,8 @@ def compute_residual_flux_loop(
     gradients,
     limiters,
     equation,
-    flux_type,
-    bcs_array,
-    elem_faces,
-    boundary_faces_nodes,
-    boundary_faces_tags,
+    bcs_lookup,
+    face_tags,
 ):
     """
     Computes the residual for the finite volume discretization.
@@ -256,23 +253,12 @@ def compute_residual_flux_loop(
                 # --- Boundary Face ---
                 # For boundary faces, the "right" state is determined by the boundary condition.
                 # This ensures a consistent second-order treatment at the boundaries.
+                face_tag = face_tags[i, j]
 
-                bcs_array,
-
-                bc_face = elem_faces[i][j]
-                for m, face_nodes in enumerate(boundary_faces_nodes):
-                    if np.all(face_nodes == bc_face):
-                        break
-
-                group_id_to_find = boundary_faces_tags[m]
-
-                bc_type = 3  # Default to wall
-                bc_value = np.array([0.0, 0.0, 0.0], dtype=np.float64)
-                for n in range(len(bcs_array)):
-                    if bcs_array[n][0] == group_id_to_find:
-                        bc_type = bcs_array[n][1]
-                        bc_value = bcs_array[n][2].copy()
-                        break
+                # Direct lookup of boundary condition data
+                bc_data = bcs_lookup[face_tag]
+                bc_type = bc_data["bc_type"]
+                bc_value = bc_data["vars"]
 
                 U_R = equation.apply_boundary_condition(
                     U_L, face_normal, bc_type, bc_value
@@ -298,10 +284,10 @@ def compute_residual_flux_loop(
 
 @profile
 def compute_residual(
-    mesh: Mesh,
+    mesh: LocalMesh,
     U: np.ndarray,
     equation,
-    bcs_array,
+    bcs_lookup,
     comm,
     limiter_type: str,
     flux_type: str,
@@ -324,7 +310,8 @@ def compute_residual(
         mesh.face_areas,
         mesh.cell_centroids,
         mesh.cell_volumes,
-        mesh.face_to_cell_distances,
+        mesh.face_to_cell_dist,
+        mesh.face_midpoints,
         U,
         over_relaxation,
     )
@@ -361,10 +348,8 @@ def compute_residual(
         limiters,
         equation,
         flux_type,
-        bcs_array,
-        mesh.elem_faces,
-        mesh.boundary_faces_nodes,
-        mesh.boundary_faces_tags,
+        bcs_lookup,
+        mesh.face_tags,
     )
 
     return residual

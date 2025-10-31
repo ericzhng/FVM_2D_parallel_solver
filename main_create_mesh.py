@@ -13,6 +13,7 @@ def main():
     # Create geometry
     gmsh.initialize()
     gmsh.model.add("test_polygon")
+
     geom = Geometry()
     surface_tag = geom.rectangle(length, height, mesh_size=0.05)
 
@@ -25,30 +26,30 @@ def main():
     # Identify the boundary lines by their position
     line_tags = [abs(tag) for dim, tag in boundary_entities]
 
-    bottom_wall = -1
-    right_outlet = -1
-    top_wall = -1
-    left_inlet = -1
+    top_bc = -1
+    bottom_bc = -1
+    left_bc = -1
+    right_bc = -1
 
     tol = 1e-9
     for line_tag in line_tags:
         bbox = gmsh.model.getBoundingBox(1, line_tag)
         if abs(bbox[1] - 0.0) < tol and abs(bbox[4] - 0.0) < tol:
-            bottom_wall = line_tag
+            bottom_bc = line_tag
         elif abs(bbox[0] - length) < tol and abs(bbox[3] - length) < tol:
-            right_outlet = line_tag
+            right_bc = line_tag
         elif abs(bbox[1] - height) < tol and abs(bbox[4] - height) < tol:
-            top_wall = line_tag
+            top_bc = line_tag
         elif abs(bbox[0] - 0.0) < tol and abs(bbox[3] - 0.0) < tol:
-            left_inlet = line_tag
+            left_bc = line_tag
 
     # Add physical groups for the boundaries
-    if left_inlet != -1:
-        gmsh.model.addPhysicalGroup(1, [left_inlet], name="inlet")
-    if right_outlet != -1:
-        gmsh.model.addPhysicalGroup(1, [right_outlet], name="outlet")
-    if bottom_wall != -1 and top_wall != -1:
-        gmsh.model.addPhysicalGroup(1, [bottom_wall, top_wall], name="wall")
+    if left_bc != -1:
+        gmsh.model.addPhysicalGroup(1, [left_bc], name="inlet")
+    if right_bc != -1:
+        gmsh.model.addPhysicalGroup(1, [right_bc], name="outlet")
+    if bottom_bc != -1 and top_bc != -1:
+        gmsh.model.addPhysicalGroup(1, [bottom_bc, top_bc], name="wall")
 
     # Generate mesh
     output_dir = "data"

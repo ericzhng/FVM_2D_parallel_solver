@@ -2,12 +2,7 @@ import numpy as np
 from numba import float64
 from numba.experimental import jitclass
 
-spec = [
-    ("gamma", float64),
-]
 
-
-@jitclass(spec)
 class EulerEquations:
     """
     Represents the 2D Euler equations for compressible fluid flow.
@@ -139,25 +134,31 @@ class EulerEquations:
         return self._prim_to_cons(P_ghost)
 
     def apply_boundary_condition(self, U_inside, normal, bc_type, bc_value):
-        # "supersonic_inlet": 5
-        # "slip_wall": 6
-        if bc_type == 1:
+        # "inlet": 1, bc_value = [rho*u, rho*v]
+        # "outlet": 2, bc_value = [rho]
+        # "wall": 3, bc_value not used
+        # "transmissive": 4, bc_value not used
+        # "supersonic_inlet": 5, bc_value = [rho, u, v, p]
+        # "slip_wall": 6, bc_value not used
+        if bc_type == 1:  # Inlet
             U_inside[1] = bc_value[0]
             U_inside[2] = bc_value[1]
             return U_inside
-        elif bc_type == 2:
+        elif bc_type == 2:  # Outlet
             U_inside[0] = bc_value[0]
             return U_inside
-        elif bc_type == 3:
+        elif bc_type == 3:  # Wall
             return self._apply_wall_bc(U_inside, normal)
-        elif bc_type == 4:
+        elif bc_type == 4:  # Transmissive
             return U_inside
         elif bc_type == 5:  # Supersonic Inlet
             rho_bc, u_bc, v_bc, p_bc = bc_value
             P_bc = np.array([rho_bc, u_bc, v_bc, p_bc])
             return self._prim_to_cons(P_bc)
         elif bc_type == 6:  # Slip Wall
-            return self._apply_wall_bc(U_inside, normal) # _apply_wall_bc already implements slip wall behavior
+            return self._apply_wall_bc(
+                U_inside, normal
+            )  # _apply_wall_bc already implements slip wall behavior
         else:
             raise ValueError("Invalid boundary condition type")
 
@@ -345,7 +346,7 @@ class EulerEquations:
 
         return flux
 
-    def hllc_flux_change(self, U_L, U_R, normal):
+    def hllc_flux_v2(self, U_L, U_R, normal):
         """
         NOT WORKING YET
         Computes the numerical flux using the HLLC (Harten-Lax-van Leer-Contact) Riemann solver.
@@ -481,7 +482,7 @@ class EulerEquations:
             # All waves move to the left
             return FR
 
-    def roe_flux_change(self, U_L, U_R, normal):
+    def roe_flux_v2(self, U_L, U_R, normal):
         """
         WORKING
         Computes the numerical flux using the Roe approximate Riemann solver.

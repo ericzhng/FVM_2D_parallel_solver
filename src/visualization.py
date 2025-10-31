@@ -1,10 +1,11 @@
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import numpy as np
-from src.mesh import Mesh
+
+from fvm_mesh.polymesh.poly_mesh import PolyMesh
 
 
-def plot_simulation_step(mesh: Mesh, U, title="", variable_to_plot=0):
+def plot_simulation_step(mesh: PolyMesh, U, title="", variable_to_plot=0):
     """
     Plots a specific variable from the solution on the mesh for a single time step.
 
@@ -23,8 +24,8 @@ def plot_simulation_step(mesh: Mesh, U, title="", variable_to_plot=0):
     # Create a triangulation for plotting
     triangles = []
     facecolors = []
-    for i, conn in enumerate(mesh.elem_conn):
-        node_indices = [np.where(mesh.node_tags == tag)[0][0] for tag in conn]
+    for i, conn in enumerate(mesh.cell_connectivity):
+        node_indices = conn
         if len(node_indices) == 4:
             triangles.append([node_indices[0], node_indices[1], node_indices[2]])
             triangles.append([node_indices[0], node_indices[2], node_indices[3]])
@@ -47,7 +48,7 @@ def plot_simulation_step(mesh: Mesh, U, title="", variable_to_plot=0):
 
 
 def create_animation(
-    mesh: Mesh, history, dt_history, filename="simulation.gif", variable_to_plot=0
+    mesh: PolyMesh, history, dt_history, filename="simulation.gif", variable_to_plot=0
 ):
     """
     Creates and saves an animation of the simulation history.
@@ -68,8 +69,8 @@ def create_animation(
 
     # Create a triangulation for plotting
     triangles = []
-    for conn in mesh.elem_conn:
-        node_indices = [np.where(mesh.node_tags == tag)[0][0] for tag in conn]
+    for conn in mesh.cell_connectivity:
+        node_indices = conn
         if len(node_indices) == 4:  # Quadrilateral
             triangles.append([node_indices[0], node_indices[1], node_indices[2]])
             triangles.append([node_indices[0], node_indices[2], node_indices[3]])
@@ -80,7 +81,7 @@ def create_animation(
     var_initial = history[0][:, variable_to_plot]
     facecolors_initial = []
     for i, h_val in enumerate(var_initial):
-        if len(mesh.elem_conn[i]) == 4:
+        if len(mesh.cell_connectivity[i]) == 4:
             facecolors_initial.extend([h_val, h_val])
         else:
             facecolors_initial.append(h_val)
@@ -105,7 +106,7 @@ def create_animation(
         h = U[:, 0]
         facecolors = []
         for i, h_val in enumerate(h):
-            if len(mesh.elem_conn[i]) == 4:
+            if len(mesh.cell_connectivity[i]) == 4:
                 facecolors.extend([h_val, h_val])
             else:
                 facecolors.append(h_val)

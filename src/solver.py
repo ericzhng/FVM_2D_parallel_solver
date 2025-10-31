@@ -1,12 +1,14 @@
+import time
 from typing import Dict, List, Tuple, Any
 
 import numpy as np
 from mpi4py import MPI
 
-from fvm_mesh.polymesh.local_mesh import LocalMesh # Corrected import
+from fvm_mesh.polymesh.local_mesh import LocalMesh
+
 from src.time_step import calculate_adaptive_dt
 from src.reconstruction import compute_residual
-from src.boundary import create_numba_bcs
+from src.boundary import create_bcs_lookup
 
 
 def exchange_halo_data(mesh: LocalMesh, U: np.ndarray, comm: MPI.Comm) -> None:
@@ -28,8 +30,12 @@ def exchange_halo_data(mesh: LocalMesh, U: np.ndarray, comm: MPI.Comm) -> None:
     # Prepare send buffers
     send_requests = []
     for neighbor_rank, local_indices_to_send in mesh.send_map.items():
-        data_to_send = U[local_indices_to_send, :].copy() # .copy() is important for non-blocking send
-        req = comm.Isend(data_to_send, dest=neighbor_rank, tag=neighbor_rank)
+        data_to_send = U[
+            local_indices_to_send, :
+        ].copy()  # .copy() is important for non-blocking send
+        req = comm.Isend(
+            [data_to_send, MPI.DOUBLE], dest=neighbor_rank, tag=neighbor_rank
+        )
         send_requests.append(req)
 
     # Prepare receive buffers and initiate receives
@@ -38,14 +44,22 @@ def exchange_halo_data(mesh: LocalMesh, U: np.ndarray, comm: MPI.Comm) -> None:
     for neighbor_rank, local_indices_to_recv in mesh.recv_map.items():
         num_halo_cells_from_neighbor = len(local_indices_to_recv)
         num_conserved_variables = U.shape[1]
-        recv_buffer = np.empty((num_halo_cells_from_neighbor, num_conserved_variables), dtype=U.dtype)
-        req = comm.Irecv(recv_buffer, source=neighbor_rank, tag=comm.Get_rank())
+        recv_buffer = np.empty(
+            (num_halo_cells_from_neighbor, num_conserved_variables), dtype=U.dtype
+        )
+        req = comm.Irecv(
+            [recv_buffer, MPI.DOUBLE], source=neighbor_rank, tag=comm.Get_rank()
+        )
         recv_requests.append(req)
         recv_buffers[(neighbor_rank, tuple(local_indices_to_recv))] = recv_buffer
 
     # Wait for all receive operations to complete and update U
     MPI.Request.Waitall(recv_requests)
-    for (neighbor_rank, local_indices_to_recv_tuple), recv_buffer in recv_buffers.items():
+
+    for (
+        neighbor_rank,
+        local_indices_to_recv_tuple,
+    ), recv_buffer in recv_buffers.items():
         U[list(local_indices_to_recv_tuple), :] = recv_buffer
 
     # Wait for all send operations to complete
@@ -115,7 +129,7 @@ def solve(
     time_integration_method: str = "rk2"  # Currently hardcoded to RK2
 
     # formulate bc array
-    bcs_array = create_numba_bcs(bc_dict, mesh.boundary_tag_map)
+    bcs_lookup = create_bcs_lookup(bc_dict, mesh.boundary_tag_map)
 
     while t < t_end:
         start_time = time.time()  # Start timing the loop
@@ -137,13 +151,14 @@ def solve(
                 mesh,
                 U,
                 equation,
-                bcs_array,
+                bcs_lookup,
                 comm,
                 limiter_type,
                 flux_type,
                 over_relaxation,
             )
-            U_star = U - dt * residual_U
+            U_star = U.copy()
+            U_star[: mesh.num_owned_cells] -= dt * residual_U
 
             # Halo exchange for U_star before computing residual_U_star
             exchange_halo_data(mesh, U_star, comm)
@@ -153,13 +168,18 @@ def solve(
                 mesh,
                 U_star,
                 equation,
-                bcs_array,
+                bcs_lookup,
                 comm,
                 limiter_type,
                 flux_type,
                 over_relaxation,
             )
-            U_new = 0.5 * (U + U_star - dt * residual_U_star)
+            U_new = U.copy()
+            U_new[: mesh.num_owned_cells] = 0.5 * (
+                U[: mesh.num_owned_cells]
+                + U_star[: mesh.num_owned_cells]
+                - dt * residual_U_star
+            )
 
         elif time_integration_method == "euler":
             # --- First-Order Euler Method ---
@@ -168,13 +188,14 @@ def solve(
                 mesh,
                 U,
                 equation,
-                bcs_array,
-                comm, # BUG FIX: Pass comm to compute_residual for Euler method
+                bcs_lookup,
+                comm,
                 limiter_type,
                 flux_type,
                 over_relaxation,
             )
-            U_new = U - dt * residual
+            U_new = U.copy()
+            U_new[: mesh.num_owned_cells] -= dt * residual
 
         else:
             raise NotImplementedError(
