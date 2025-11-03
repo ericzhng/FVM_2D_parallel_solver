@@ -8,7 +8,6 @@ from fvm_mesh.polymesh.local_mesh import LocalMesh
 
 from src.time_step import calculate_adaptive_dt
 from src.reconstruction import compute_residual
-from src.boundary import create_bcs_lookup
 
 
 def exchange_halo_data(mesh: LocalMesh, U: np.ndarray, comm: MPI.Comm) -> None:
@@ -69,7 +68,7 @@ def exchange_halo_data(mesh: LocalMesh, U: np.ndarray, comm: MPI.Comm) -> None:
 def solve(
     mesh: LocalMesh,
     U: np.ndarray,
-    bc_dict: Dict[str, Any],
+    bcs_lookup: Dict[str, Any],
     equation: Any,
     comm: MPI.Comm,
     t_end: float,
@@ -127,9 +126,6 @@ def solve(
     dt_history: List[float] = []
     dt: float = dt_initial
     time_integration_method: str = "rk2"  # Currently hardcoded to RK2
-
-    # formulate bc array
-    bcs_lookup = create_bcs_lookup(bc_dict, mesh.boundary_tag_map)
 
     while t < t_end:
         start_time = time.time()  # Start timing the loop

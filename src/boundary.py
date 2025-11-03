@@ -1,82 +1,58 @@
+
 import numpy as np
 
-# --- Sample BC Dictionary-based Definition ---
-# bc_dict: Dict[str, Dict[str, Union[str, float, bool]]] = {
-#     "inlet_channel": {"type": "inlet", "velocity": [1.5, 0.0]},
-#     "outlet_weir": {"type": "outlet", "pressure": 0.0},
-#     "downstream_boundary": {"type": "outlet", "water_depth": 0.5},
-#     "solid_walls": {"type": "wall", "slip": False},
-#     "open_boundary": {"type": "transmissive"},
-# }
-
-
-# Mapping for Boundary Condition types
-BC_TYPE_MAP = {
-    "inlet": 1,
-    "outlet": 2,
-    "wall": 3,
-    "transmissive": 4,
-    "supersonic_inlet": 5,  # New type for supersonic inlet
-    "slip_wall": 6,  # New type for slip wall
-}
-
-
-def create_bcs_lookup(
-    bc_dict,
-    boundary_tag_map,
-):
+class BoundaryConditions:
     """
-    Converts the human-readable dictionary into a NumPy structured array
-    that can be used as a lookup table in Numba.
-    The index of the array corresponds to the boundary tag ID.
+    Manages boundary conditions for a simulation.
     """
-    # Define the structure (dtype) of our array.
-    bc_data_dtype = np.dtype(
-        [
-            ("bc_type", np.int32),
-            ("vars", (np.float64, 4)),
-        ]
-    )
+    def __init__(self, bc_dict, boundary_tag_map):
+        self.bc_dict = bc_dict
+        self.boundary_tag_map = boundary_tag_map
+        self.bc_map = self._create_bc_map()
 
-    max_tag = 0
-    if boundary_tag_map and boundary_tag_map.values():
-        max_tag = max(boundary_tag_map.values())
+    def _create_bc_map(self):
+        """
+        Creates a mapping from boundary tag ID to boundary condition properties.
+        """
+        bc_map = {}
+        for name, props in self.bc_dict.items():
+            tag_id = self.boundary_tag_map.get(name)
+            if tag_id is not None:
+                bc_map[tag_id] = props
+        return bc_map
 
-    # Create lookup table, initialize with a default BC (e.g., wall)
-    default_bc_type = BC_TYPE_MAP.get("wall", 3)
-    default_vars = np.zeros(4, dtype=np.float64)
+    def to_lookup_array(self):
+        """
+        Converts the boundary conditions to a Numba-compatible lookup array.
+        """
+        max_tag = 0
+        if self.boundary_tag_map:
+            max_tag = max(self.boundary_tag_map.values())
 
-    bcs_lookup = np.empty(max_tag + 1, dtype=bc_data_dtype)
-    for i in range(max_tag + 1):
-        bcs_lookup[i] = (default_bc_type, default_vars)
+        # Define a flexible dtype for the structured array
+        bc_data_dtype = np.dtype([
+            ('type', 'U20'),  # String for type
+            ('values', (np.float64, 4))  # Array of 4 floats for values
+        ])
 
-    for tag_name, props in bc_dict.items():
-        tag_id = boundary_tag_map.get(tag_name, -1)
-        if tag_id == -1:
-            continue
+        bcs_lookup = np.empty(max_tag + 1, dtype=bc_data_dtype)
 
-        bc_type_str = props.get("type", "wall")
-        bc_type_id = BC_TYPE_MAP.get(bc_type_str, 3)
+        for i in range(max_tag + 1):
+            bc_props = self.bc_map.get(i)
+            if bc_props:
+                bc_type = bc_props.get('type', 'transmissive')
+                values = np.zeros(4)
+                if bc_type == 'supersonic_inlet':
+                    values[0] = bc_props.get('rho', 1.0)
+                    values[1] = bc_props.get('u', 0.0)
+                    values[2] = bc_props.get('v', 0.0)
+                    values[3] = bc_props.get('p', 1.0)
+                elif bc_type == 'wall':
+                    values[0] = 1.0 if bc_props.get('slip', False) else 0.0
 
-        vars_val = np.zeros(4, dtype=np.float64)
+                bcs_lookup[i] = (bc_type, values)
+            else:
+                # Default to transmissive if a tag is not in the bc_dict
+                bcs_lookup[i] = ('transmissive', np.zeros(4))
 
-        # Populate params based on BC type
-        if bc_type_id == BC_TYPE_MAP["inlet"]:  # inlet
-            velocity = props.get("velocity", [0.0, 0.0, 0.0])
-            vars_val[0:3] = np.array(velocity, dtype=np.float64)
-        elif bc_type_id == BC_TYPE_MAP["outlet"]:  # outlet
-            vars_val[0] = props.get("pressure", 0.0)
-        elif bc_type_id == BC_TYPE_MAP["wall"]:  # Wall
-            vars_val[0] = 1.0 if props.get("slip", False) else 0.0
-        elif bc_type_id == BC_TYPE_MAP["supersonic_inlet"]:  # Supersonic Inlet
-            vars_val[0] = props.get("rho", 1.0)
-            vars_val[1] = props.get("u", 0.0)
-            vars_val[2] = props.get("v", 0.0)
-            vars_val[3] = props.get("p", 1.0)
-        elif bc_type_id == BC_TYPE_MAP["slip_wall"]:  # Slip Wall
-            vars_val[0] = 1.0  # Indicate slip wall
-
-        if tag_id <= max_tag:
-            bcs_lookup[tag_id] = (bc_type_id, vars_val)
-
-    return bcs_lookup
+        return bcs_lookup

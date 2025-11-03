@@ -8,6 +8,7 @@ from src.case_setup import setup_case_euler
 from src.euler_equations import EulerEquations
 from src.visualization import plot_simulation_step, create_animation
 from src.solver import solve
+from src.boundary import BoundaryConditions
 
 
 def reconstruct_and_visualize(comm, mesh, history, dt_history, U_init, global_mesh):
@@ -104,6 +105,9 @@ def main():
     print("Setting up the simulation case...")
 
     U_init, bc_dict = setup_case_euler(mesh, comm, gamma=1.4)
+
+    boundary_conditions = BoundaryConditions(bc_dict, mesh.boundary_tag_map)
+    bcs_lookup = boundary_conditions.to_lookup_array()
     equation = EulerEquations(gamma=1.4)
     t_end = 0.25
 
@@ -112,7 +116,7 @@ def main():
     history, dt_history = solve(
         mesh,
         U_init,
-        bc_dict,
+        bcs_lookup,
         equation,
         comm,
         t_end=t_end,

@@ -99,68 +99,33 @@ class EulerEquations:
         # Max eigenvalue = |v| + a
         return np.sqrt(u**2 + v**2) + a
 
-    def _apply_wall_bc(self, U_inside, normal):
-        """
-        Applies a solid wall (reflective) boundary condition.
-
-        This condition reflects the velocity normal to the wall while keeping the
-        tangential velocity and thermodynamic properties (pressure, density) the same.
-
-        Args:
-            U_inside (np.ndarray): State vector of the interior cell.
-            normal (np.ndarray): Normal vector of the boundary face.
-
-        Returns:
-            np.ndarray: The state vector of the ghost cell.
-        """
-        rho, u, v, p = self._cons_to_prim(U_inside)
-
-        # Decompose velocity into normal and tangential components
-        vn = u * normal[0] + v * normal[1]
-        vt = u * -normal[1] + v * normal[0]
-
-        # Reflect the normal velocity, keep tangential velocity
-        vn_ghost = -vn
-        vt_ghost = vt
-
-        # Recompose the ghost velocity vector from the new normal and tangential components
-        u_ghost = vn_ghost * normal[0] - vt_ghost * normal[1]
-        v_ghost = vn_ghost * normal[1] + vt_ghost * normal[0]
-
-        # Create the primitive state for the ghost cell
-        P_ghost = np.array([rho, u_ghost, v_ghost, p])
-
-        # Convert back to conservative variables
-        return self._prim_to_cons(P_ghost)
-
     def apply_boundary_condition(self, U_inside, normal, bc_type, bc_value):
-        # "inlet": 1, bc_value = [rho*u, rho*v]
-        # "outlet": 2, bc_value = [rho]
-        # "wall": 3, bc_value not used
-        # "transmissive": 4, bc_value not used
-        # "supersonic_inlet": 5, bc_value = [rho, u, v, p]
-        # "slip_wall": 6, bc_value not used
-        if bc_type == 1:  # Inlet
-            U_inside[1] = bc_value[0]
-            U_inside[2] = bc_value[1]
+        if bc_type == 'transmissive':
             return U_inside
-        elif bc_type == 2:  # Outlet
-            U_inside[0] = bc_value[0]
-            return U_inside
-        elif bc_type == 3:  # Wall
-            return self._apply_wall_bc(U_inside, normal)
-        elif bc_type == 4:  # Transmissive
-            return U_inside
-        elif bc_type == 5:  # Supersonic Inlet
+        elif bc_type == 'wall':
+            P_inside = self._cons_to_prim(U_inside)
+            rho, u, v, p = P_inside
+
+            vn = u * normal[0] + v * normal[1]
+            vt = u * -normal[1] + v * normal[0]
+
+            vn_ghost = -vn
+            vt_ghost = vt if bc_value[0] == 1.0 else 0.0  # slip or no-slip
+
+            u_ghost = vn_ghost * normal[0] - vt_ghost * normal[1]
+            v_ghost = vn_ghost * normal[1] + vt_ghost * normal[0]
+
+            P_ghost = np.array([rho, u_ghost, v_ghost, p])
+            return self._prim_to_cons(P_ghost)
+
+        elif bc_type == 'supersonic_inlet':
             rho_bc, u_bc, v_bc, p_bc = bc_value
             P_bc = np.array([rho_bc, u_bc, v_bc, p_bc])
             return self._prim_to_cons(P_bc)
-        elif bc_type == 6:  # Slip Wall
-            return self._apply_wall_bc(
-                U_inside, normal
-            )  # _apply_wall_bc already implements slip wall behavior
+
         else:
-            raise ValueError("Invalid boundary condition type")
+            # Default to transmissive for unknown types
+            return U_inside
 
     def hllc_flux(self, U_L, U_R, normal):
         """

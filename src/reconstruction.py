@@ -5,6 +5,8 @@ from line_profiler import profile
 import numpy as np
 from fvm_mesh.polymesh.local_mesh import LocalMesh
 
+from src.euler_equations import EulerEquations
+
 
 # --- Limiter Functions (JIT-compiled for performance) ---
 @numba.njit
@@ -193,9 +195,10 @@ def compute_residual_flux_loop(
     U,
     gradients,
     limiters,
-    equation,
+    equation: EulerEquations,
     bcs_lookup,
     face_tags,
+    flux_type,
 ):
     """
     Computes the residual for the finite volume discretization.
@@ -347,9 +350,9 @@ def compute_residual(
         gradients,
         limiters,
         equation,
-        flux_type,
         bcs_lookup,
         mesh.face_tags,
+        flux_type,
     )
 
     return residual

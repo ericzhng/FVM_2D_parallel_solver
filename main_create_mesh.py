@@ -63,6 +63,7 @@ def main():
         show_cells=True,
     )
 
+    gmsh.fltk.run()
     gmsh.finalize()
 
 
