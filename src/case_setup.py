@@ -41,7 +41,6 @@ def setup_case_euler(mesh: PolyMesh, comm, gamma=1.4):
     p = p_vals[0] * reg1 + p_vals[1] * reg2 + p_vals[2] * reg3 + p_vals[3] * reg4
 
     # Calculate total energy per unit volume (E)
-    # E = p / (gamma - 1) + 0.5 * rho * (u^2 + v^2)
     energy = p / (gamma - 1) + 0.5 * rho * (u**2 + v**2)
 
     # # Calculate speed of sound (c) for each cell

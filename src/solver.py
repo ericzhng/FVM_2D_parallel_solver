@@ -68,7 +68,7 @@ def exchange_halo_data(mesh: LocalMesh, U: np.ndarray, comm: MPI.Comm) -> None:
 def solve(
     mesh: LocalMesh,
     U: np.ndarray,
-    bcs_lookup: Dict[str, Any],
+    bcs_lookup: Dict[tuple[int], Any],
     equation: Any,
     comm: MPI.Comm,
     t_end: float,

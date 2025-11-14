@@ -70,7 +70,12 @@ def reconstruct_and_visualize(comm, mesh, history, dt_history, U_init, global_me
             )
 
 
-def main():
+import os
+import debugpy
+from mpi4py import MPI
+
+
+def main(comm, rank, size):
     """
     Main function to run the 2D Finite Volume Method (FVM) solver.
 
@@ -80,13 +85,8 @@ def main():
     3.  Runs the FVM solver to advance the solution in time.
     4.  Visualizes the results.
     """
-
-    # --- 1. Initialize MPI and Read Mesh ---
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
-
     print(f"Process {rank}/{size}: Initializing and reading mesh...")
+
     if rank == 0:
         global_mesh = PolyMesh.from_gmsh("data/euler_mesh.msh")
         global_mesh.analyze_mesh()
@@ -96,6 +96,9 @@ def main():
     else:
         global_mesh = None
         local_meshes_list = None
+
+    # Add a barrier to synchronize all processes
+    comm.Barrier()
 
     # Distribute the mesh to all processes
     local_mesh = comm.scatter(local_meshes_list, root=0)
@@ -134,4 +137,28 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+
+    # --- 1. Initialize MPI and Read Mesh ---
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    size = comm.Get_size()
+
+    # Optional: Print PID for easier identification
+    print(f"Rank {rank}: PID {os.getpid()}")
+
+    # Attach debugpy to this process
+    # You might want to make the port rank-specific or use a different strategy
+    # For simplicity, let's use a base port and add the rank
+    port = 5678 + rank
+    debugpy.listen(("localhost", port))
+
+    print(f"Rank {rank}: Waiting for debugger to attach on port {port}", flush=True)
+    debugpy.wait_for_client()
+    debugpy.breakpoint()
+
+    print(f"Rank {rank}: Debugger attached on port {port}!", flush=True)
+
+    # Add a barrier to synchronize all processes
+    comm.Barrier()
+
+    main(comm, rank, size)
