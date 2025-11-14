@@ -55,9 +55,6 @@ coverage.xml
 # pyenv
 .python-version
 
-# VS Code
-.vscode/
-
 # Mac
 .DS_Store
 
