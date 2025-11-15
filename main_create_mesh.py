@@ -15,7 +15,7 @@ def main():
     gmsh.model.add("test_polygon")
 
     geom = Geometry()
-    surface_tag = geom.rectangle(length, height, mesh_size=0.1)
+    surface_tag = geom.rectangle(length, height, mesh_size=0.01)
 
     # synchronize the geo kernel to the model so model-level API can access entities
     gmsh.model.geo.synchronize()
@@ -57,15 +57,15 @@ def main():
     output_dir = "data"
     mesher = MeshGenerator(surface_tags=surface_tag, output_dir=output_dir)
     mesh_filename = "euler_mesh.msh"
-    mesh_params = {surface_tag: {"mesh_type": "quads", "char_length": 0.01}}
+    mesh_params = {surface_tag: {"mesh_type": "structured", "char_length": 0.01}}
     mesher.generate(
         mesh_params=mesh_params,
         filename=mesh_filename,
-        show_nodes=True,
-        show_cells=True,
+        show_nodes=False,
+        show_cells=False,
     )
 
-    gmsh.fltk.run()
+    # gmsh.fltk.run()
     gmsh.finalize()
 
 

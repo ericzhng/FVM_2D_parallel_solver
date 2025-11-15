@@ -61,14 +61,16 @@ def setup_mesh_and_scatter(comm):
 
         logger.info(f"Partitioning mesh into {size} parts...")
         parts = partition_mesh(global_mesh, n_parts=size, method="metis")
-        global_mesh.plot("results/mesh_global.png", parts)
+        global_mesh.plot(
+            "results/mesh_global.png", parts, show_nodes=False, show_cells=False
+        )
 
         local_meshes_list = create_local_meshes(global_mesh, n_parts=size)
 
     # Distribute the mesh to all processes
     logger.info(f"Rank {rank}: Receiving scattered local mesh...")
     mesh = comm.scatter(local_meshes_list, root=0)
-    mesh.plot(f"results/mesh_rank_{rank}.png")
+    mesh.plot(f"results/mesh_rank_{rank}.png", show_nodes=False, show_cells=False)
     comm.Barrier()
 
     return global_mesh, mesh
@@ -129,7 +131,11 @@ def reconstruct_and_visualize(
         logger.info("Plotting final state...")
         for k in range(num_vars):
             plot_simulation_step(
-                global_mesh, global_history[-1], "Final State", variable_to_plot=k
+                global_mesh,
+                global_history[-1],
+                "Final State",
+                variable_to_plot=k,
+                output_dir="results",
             )
 
 
@@ -189,8 +195,6 @@ def main():
     # --- Initialize MPI ---
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
-
-    print(args.mpi_debug)
 
     # --- Conditional MPI Debugging ---
     if args.mpi_debug:

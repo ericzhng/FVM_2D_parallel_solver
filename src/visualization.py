@@ -5,7 +5,9 @@ import matplotlib.animation as animation
 from fvm_mesh.polymesh import CoreMesh
 
 
-def plot_simulation_step(mesh: CoreMesh, U, title="", variable_to_plot=0):
+def plot_simulation_step(
+    mesh: CoreMesh, U, title="", variable_to_plot=0, output_dir="."
+):
     """
     Plots a specific variable from the solution on the mesh for a single time step.
 
@@ -43,7 +45,7 @@ def plot_simulation_step(mesh: CoreMesh, U, title="", variable_to_plot=0):
     plt.xlabel("X-coordinate")
     plt.ylabel("Y-coordinate")
     plt.gca().set_aspect("equal", adjustable="box")
-    plt.savefig(f"Final_{variable_to_plot}.png")
+    plt.savefig(f"{output_dir}/Final_{variable_to_plot}.png")
     # plt.show()
 
 

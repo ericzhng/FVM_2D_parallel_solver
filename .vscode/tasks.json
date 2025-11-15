@@ -4,8 +4,8 @@
     {
       "label": "mpi-debug",
       "type": "shell",
-      "command": "C:\\Software\\anaconda3\\Scripts\\activate.bat C:\\Software\\anaconda3 && conda activate env_fvm && mpiexec -n 2 python main_solve_euler.py --mpi-debug True",
-      // "command": "C:\\tools\\Python\\venv\\env_common\\Scripts\\activate.bat && mpiexec -n 2 python main_solve_euler.py",
+      "command": "C:\\Software\\anaconda3\\Scripts\\activate.bat C:\\Software\\anaconda3 && conda activate env_fvm && mpiexec -n 4 python main_solve_euler.py",
+      // "command": "C:\\tools\\Python\\venv\\env_common\\Scripts\\activate.bat && mpiexec -n 2 python main_solve_euler.py --mpi-debug True",
       "args": [],
       "group": {
         "kind": "test"
