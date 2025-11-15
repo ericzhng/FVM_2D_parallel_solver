@@ -1,8 +1,10 @@
 import numpy as np
 from mpi4py import MPI
 
+from src.solver_options import SolverOptions
 
-def calculate_adaptive_dt(mesh, U, equation, cfl_number, comm):
+
+def calculate_adaptive_dt(mesh, U, equation, options: SolverOptions, comm):
     """
     Calculates the adaptive time step for the simulation based on the CFL condition.
 
@@ -13,7 +15,7 @@ def calculate_adaptive_dt(mesh, U, equation, cfl_number, comm):
         mesh (Mesh): The mesh object.
         U (np.ndarray): The conservative state vector for all cells.
         equation (BaseEquation): The equation system to be solved.
-        cfl_number (float): The Courant-Friedrichs-Lewy (CFL) number.
+        options (SolverOptions): Configuration options for the solver.
         comm (MPI.Comm): The MPI communicator.
 
     Returns:
@@ -29,4 +31,4 @@ def calculate_adaptive_dt(mesh, U, equation, cfl_number, comm):
     # Perform a global allreduce to find the minimum dt across all processes
     global_min_dt = comm.allreduce(local_min_dt, op=MPI.MIN)
 
-    return cfl_number * global_min_dt
+    return options.cfl * global_min_dt

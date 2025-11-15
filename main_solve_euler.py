@@ -1,17 +1,19 @@
 import numpy as np
 from mpi4py import MPI
 
-from fvm_mesh.polymesh.poly_mesh import PolyMesh
-from fvm_mesh.polymesh.local_mesh import create_local_meshes
+from fvm_mesh.polymesh import CoreMesh, PolyMesh
+from fvm_mesh.polymesh import create_local_meshes
+from fvm_mesh.polymesh import partition_mesh
 
 from src.case_setup import setup_case_euler
 from src.euler_equations import EulerEquations
 from src.visualization import plot_simulation_step, create_animation
 from src.solver import solve
+from src.solver_options import SolverOptions
 from src.boundary import BoundaryConditions
 
 
-def reconstruct_and_visualize(comm, mesh, history, dt_history, U_init, global_mesh):
+def reconstruct_and_visualize(global_mesh, mesh, history, dt_history, U_init, comm):
     """
     Gathers data from all processes and performs visualization on rank 0.
     """
@@ -88,10 +90,13 @@ def main(comm, rank, size):
     print(f"Process {rank}/{size}: Initializing and reading mesh...")
 
     if rank == 0:
-        global_mesh = PolyMesh.from_gmsh("data/euler_mesh.msh")
+        global_mesh = CoreMesh()
+        global_mesh.read_gmsh("data/euler_mesh.msh")
         global_mesh.analyze_mesh()
-        global_mesh.print_summary()
-        # create_local_meshes expects a CoreMesh; provide the underlying core mesh from PolyMesh
+
+        parts = partition_mesh(global_mesh, n_parts=size, method="metis")
+        global_mesh.plot(f"results/mesh_global.png", parts)
+
         local_meshes_list = create_local_meshes(global_mesh, n_parts=size)
     else:
         global_mesh = None
@@ -101,8 +106,8 @@ def main(comm, rank, size):
     comm.Barrier()
 
     # Distribute the mesh to all processes
-    local_mesh = comm.scatter(local_meshes_list, root=0)
-    mesh = local_mesh  # Renaming for consistency with the rest of the code
+    mesh = comm.scatter(local_meshes_list, root=0)
+    mesh.plot(f"results/mesh_rank_{rank}.png")
 
     # --- 2. Set Up Case ---
     print("Setting up the simulation case...")
@@ -110,30 +115,38 @@ def main(comm, rank, size):
     U_init, bc_dict = setup_case_euler(mesh, comm, gamma=1.4)
 
     boundary_conditions = BoundaryConditions(bc_dict, mesh.boundary_tag_map)
+
     bcs_lookup = boundary_conditions.to_lookup_array()
+
     equation = EulerEquations(gamma=1.4)
     t_end = 0.25
 
     # --- 3. Solve ---
     print("Starting the FVM solver...")
-    history, dt_history = solve(
-        mesh,
-        U_init,
-        bcs_lookup,
-        equation,
-        comm,
-        t_end=t_end,
+
+    # Configure solver options
+    solver_opts = SolverOptions(
         limiter_type="minmod",  # Options: 'barth_jespersen', 'minmod', 'superbee'
         flux_type="roe",
         over_relaxation=1.0,
-        use_adaptive_dt=True,
         cfl=0.5,
+        use_adaptive_dt=True,
         dt_initial=1e-2,
+    )
+
+    history, dt_history = solve(
+        equation,
+        mesh,
+        U_init,
+        bcs_lookup,
+        t_end,
+        comm,
+        options=solver_opts,
     )
     print("Solver finished.")
 
     # --- 4. Visualize ---
-    reconstruct_and_visualize(comm, mesh, history, dt_history, U_init, global_mesh)
+    reconstruct_and_visualize(global_mesh, mesh, history, dt_history, U_init, comm)
 
 
 if __name__ == "__main__":

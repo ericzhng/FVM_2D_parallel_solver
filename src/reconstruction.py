@@ -6,6 +6,7 @@ import numpy as np
 from fvm_mesh.polymesh.local_mesh import LocalMesh
 
 from src.euler_equations import EulerEquations
+from src.solver_options import SolverOptions
 
 
 # --- Limiter Functions (JIT-compiled for performance) ---
@@ -33,7 +34,6 @@ LIMITERS = {
 # --- Parallelized Core Functions ---
 
 
-@profile
 @numba.njit(parallel=True)
 def compute_gradients_gaussian(
     num_cells,
@@ -112,7 +112,6 @@ def compute_gradients_gaussian(
     return gradients
 
 
-@profile
 @numba.njit(parallel=True)
 def compute_limiters(
     num_cells,
@@ -180,7 +179,6 @@ def compute_limiters(
     return limiters
 
 
-@profile
 @numba.njit(parallel=True)
 def compute_residual_flux_loop(
     num_owned_cells,
@@ -197,7 +195,7 @@ def compute_residual_flux_loop(
     limiters,
     equation: EulerEquations,
     bcs_lookup,
-    face_tags,
+    cell_face_tags,
     flux_type,
 ):
     """
@@ -256,16 +254,22 @@ def compute_residual_flux_loop(
                 # --- Boundary Face ---
                 # For boundary faces, the "right" state is determined by the boundary condition.
                 # This ensures a consistent second-order treatment at the boundaries.
-                face_tag = face_tags[i, j]
+                face_tag = cell_face_tags[i, j]
+                if face_tag > 0:  # Assuming tags are positive integers
+                    # Direct lookup of boundary condition data
+                    bc_data = bcs_lookup[face_tag]
+                    bc_type = bc_data["type"]
+                    bc_value = bc_data["values"]
 
-                # Direct lookup of boundary condition data
-                bc_data = bcs_lookup[face_tag]
-                bc_type = bc_data["bc_type"]
-                bc_value = bc_data["vars"]
-
-                U_R = equation.apply_boundary_condition(
-                    U_L, face_normal, bc_type, bc_value
-                )
+                    U_R = equation.apply_boundary_condition(
+                        U_L, face_normal, bc_type, bc_value
+                    )
+                else:
+                    # This case should ideally not be reached if the mesh connectivity is correct.
+                    # As a fallback, apply a default boundary condition (e.g., slip wall).
+                    U_R = equation.apply_boundary_condition(
+                        U_L, face_normal, "slip", np.array([0.0])
+                    )
 
             # --- Numerical Flux Calculation ---
             # The numerical flux is computed using the specified Riemann solver.
@@ -285,23 +289,14 @@ def compute_residual_flux_loop(
     return residual
 
 
-@profile
 def compute_residual(
     mesh: LocalMesh,
     U: np.ndarray,
     equation,
     bcs_lookup,
-    comm,
-    limiter_type: str,
-    flux_type: str,
-    over_relaxation: float = 1.2,
+    options: "SolverOptions",
 ) -> np.ndarray:
     nvars = U.shape[1]
-
-    # --- Exchange ghost cell data ---
-    # This is a placeholder. The actual implementation will depend on fvm_mesh's API for ghost cell exchange.
-    # For example: U = mesh.exchange_ghost_cells(U, comm) or similar.
-    # For now, we assume U already contains ghost cell data or that the mesh object handles it internally.
 
     # --- 1. Gradient Computation ---
     # Gradients are computed at cell centroids and used for second-order reconstruction.
@@ -316,12 +311,12 @@ def compute_residual(
         mesh.face_to_cell_dist,
         mesh.face_midpoints,
         U,
-        over_relaxation,
+        options.over_relaxation,
     )
 
     # --- 2. Slope Limiting ---
     # Limiters are applied to the gradients to ensure monotonicity and prevent oscillations.
-    limiter_func = LIMITERS.get(limiter_type, barth_jespersen_limiter)
+    limiter_func = LIMITERS.get(options.limiter_type, barth_jespersen_limiter)
     limiters = compute_limiters(
         mesh.num_cells,
         nvars,
@@ -351,8 +346,8 @@ def compute_residual(
         limiters,
         equation,
         bcs_lookup,
-        mesh.face_tags,
-        flux_type,
+        mesh.cell_face_tags,
+        options.flux_type,
     )
 
     return residual

@@ -15,7 +15,7 @@ def main():
     gmsh.model.add("test_polygon")
 
     geom = Geometry()
-    surface_tag = geom.rectangle(length, height, mesh_size=0.05)
+    surface_tag = geom.rectangle(length, height, mesh_size=0.1)
 
     # synchronize the geo kernel to the model so model-level API can access entities
     gmsh.model.geo.synchronize()
@@ -45,11 +45,13 @@ def main():
 
     # Add physical groups for the boundaries
     if left_bc != -1:
-        gmsh.model.addPhysicalGroup(1, [left_bc], name="inlet")
+        gmsh.model.addPhysicalGroup(1, [left_bc], name="left")
     if right_bc != -1:
-        gmsh.model.addPhysicalGroup(1, [right_bc], name="outlet")
-    if bottom_bc != -1 and top_bc != -1:
-        gmsh.model.addPhysicalGroup(1, [bottom_bc, top_bc], name="wall")
+        gmsh.model.addPhysicalGroup(1, [right_bc], name="right")
+    if bottom_bc != -1:
+        gmsh.model.addPhysicalGroup(1, [bottom_bc], name="bottom")
+    if top_bc != -1:
+        gmsh.model.addPhysicalGroup(1, [top_bc], name="top")
 
     # Generate mesh
     output_dir = "data"
