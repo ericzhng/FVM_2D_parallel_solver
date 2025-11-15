@@ -2,10 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-from fvm_mesh.polymesh.poly_mesh import PolyMesh
+from fvm_mesh.polymesh import CoreMesh
 
 
-def plot_simulation_step(mesh: PolyMesh, U, title="", variable_to_plot=0):
+def plot_simulation_step(mesh: CoreMesh, U, title="", variable_to_plot=0):
     """
     Plots a specific variable from the solution on the mesh for a single time step.
 
@@ -48,7 +48,7 @@ def plot_simulation_step(mesh: PolyMesh, U, title="", variable_to_plot=0):
 
 
 def create_animation(
-    mesh: PolyMesh, history, dt_history, filename="simulation.gif", variable_to_plot=0
+    mesh: CoreMesh, history, dt_history, filename="simulation.gif", variable_to_plot=0
 ):
     """
     Creates and saves an animation of the simulation history.
