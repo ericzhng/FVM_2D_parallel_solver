@@ -1,12 +1,17 @@
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from mpi4py import MPI
 
-from fvm_mesh.polymesh import CoreMesh
+from fvm_mesh.polymesh import PolyMesh, LocalMesh
+
+
+logger = logging.getLogger(__name__)
 
 
 def plot_simulation_step(
-    mesh: CoreMesh, U, title="", variable_to_plot=0, output_dir="."
+    mesh: PolyMesh, U, title="", variable_to_plot=0, output_dir="."
 ):
     """
     Plots a specific variable from the solution on the mesh for a single time step.
@@ -26,7 +31,7 @@ def plot_simulation_step(
     # Create a triangulation for plotting
     triangles = []
     facecolors = []
-    for i, conn in enumerate(mesh.cell_connectivity):
+    for i, conn in enumerate(mesh.cell_node_connectivity):
         node_indices = conn
         if len(node_indices) == 4:
             triangles.append([node_indices[0], node_indices[1], node_indices[2]])
@@ -40,17 +45,17 @@ def plot_simulation_step(
     plt.tripcolor(
         x, y, triangles=triangles, facecolors=facecolors, shading="flat", cmap="viridis"
     )
-    plt.colorbar(label=f"Variable {variable_to_plot}")
+    plt.colorbar(label=f"Variable {variable_to_plot+1}")
     plt.title(title)
     plt.xlabel("X-coordinate")
     plt.ylabel("Y-coordinate")
     plt.gca().set_aspect("equal", adjustable="box")
-    plt.savefig(f"{output_dir}/Final_{variable_to_plot}.png")
+    plt.savefig(f"{output_dir}/Final_step_var{variable_to_plot+1}.png")
     # plt.show()
 
 
 def create_animation(
-    mesh: CoreMesh, history, dt_history, filename="simulation.gif", variable_to_plot=0
+    mesh: PolyMesh, history, dt_history, filename="simulation.gif", variable_to_plot=0
 ):
     """
     Creates and saves an animation of the simulation history.
@@ -71,7 +76,7 @@ def create_animation(
 
     # Create a triangulation for plotting
     triangles = []
-    for conn in mesh.cell_connectivity:
+    for conn in mesh.cell_node_connectivity:
         node_indices = conn
         if len(node_indices) == 4:  # Quadrilateral
             triangles.append([node_indices[0], node_indices[1], node_indices[2]])
@@ -83,7 +88,7 @@ def create_animation(
     var_initial = history[0][:, variable_to_plot]
     facecolors_initial = []
     for i, h_val in enumerate(var_initial):
-        if len(mesh.cell_connectivity[i]) == 4:
+        if len(mesh.cell_node_connectivity[i]) == 4:
             facecolors_initial.extend([h_val, h_val])
         else:
             facecolors_initial.append(h_val)
@@ -108,7 +113,7 @@ def create_animation(
         h = U[:, 0]
         facecolors = []
         for i, h_val in enumerate(h):
-            if len(mesh.cell_connectivity[i]) == 4:
+            if len(mesh.cell_node_connectivity[i]) == 4:
                 facecolors.extend([h_val, h_val])
             else:
                 facecolors.append(h_val)
@@ -132,3 +137,70 @@ def create_animation(
     # Save or show the animation
     # anim.save(filename, writer='imagemagick', fps=10)
     plt.show()
+
+
+def reconstruct_and_visualize(
+    global_mesh: PolyMesh | None, mesh: LocalMesh, history, dt_history, comm
+):
+    """
+    Gathers simulation data from all processes and performs visualization on rank 0.
+
+    Args:
+        global_mesh (PolyMesh): The complete mesh, required on rank 0.
+        mesh (LocalMesh): The local mesh object for the current rank.
+        history (list): A list of the conservative state vectors over time for the local mesh.
+        dt_history (list): A list of the time steps (dt) used in the simulation.
+        comm (MPI.Comm): The MPI communicator.
+    """
+    rank = comm.Get_rank()
+
+    # Gather all histories and local meshes on rank 0
+    logger.info(f"Rank {rank}: Gathering results for visualization.")
+    all_histories = comm.gather(history, root=0)
+    all_local_meshes = comm.gather(mesh, root=0)
+
+    if rank == 0:
+        logger.info("Reconstructing global data and visualizing on rank 0...")
+        if not all_histories or not all_local_meshes:
+            logger.warning("No data received on rank 0 for visualization.")
+            return
+
+        if global_mesh is None:
+            logger.warning("No global mesh provided for visualization.")
+            return
+
+        # --- Reconstruct Global Data ---
+        num_time_steps = len(all_histories[0])
+        num_vars = all_histories[0][0].shape[1]
+        num_global_cells = len(global_mesh.cell_centroids)
+        global_history = []
+
+        for t in range(num_time_steps):
+            U_global = np.zeros((num_global_cells, num_vars))
+            for i, (rank_history, local_mesh) in enumerate(
+                zip(all_histories, all_local_meshes)
+            ):
+                local_U = rank_history[t]
+                if hasattr(local_mesh, "l2g_cells"):
+                    global_indices = local_mesh.l2g_cells[: local_mesh.num_owned_cells]
+                    U_global[global_indices] = local_U[: local_mesh.num_owned_cells]
+                else:
+                    logger.warning(
+                        "`local_mesh.l2g_cells` not found. "
+                        "Visualization may be incorrect."
+                    )
+            global_history.append(U_global)
+
+        # --- Visualize ---
+        logger.info("Creating animation of the results...")
+        create_animation(global_mesh, global_history, dt_history, variable_to_plot=0)
+
+        logger.info("Plotting final state...")
+        for k in range(num_vars):
+            plot_simulation_step(
+                global_mesh,
+                global_history[-1],
+                "Final State",
+                variable_to_plot=k,
+                output_dir="results",
+            )

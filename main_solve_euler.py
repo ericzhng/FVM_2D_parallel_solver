@@ -15,21 +15,20 @@ The process includes:
 import os
 import argparse
 import logging
+import yaml
 
 # --- Third-Party Imports ---
-import numpy as np
 from mpi4py import MPI
 import debugpy
 
 # --- Local Application Imports ---
-from fvm_mesh.polymesh import CoreMesh, LocalMesh
-from fvm_mesh.polymesh import create_local_meshes, partition_mesh
-from src.case_setup import setup_case_euler
-from src.euler_equations import EulerEquations
-from src.visualization import plot_simulation_step, create_animation
-from src.solver import solve
+from fvm_mesh.polymesh import PolyMesh, MeshPartitionManager, partition_mesh
+
+from src.simulation import Simulation
+from src.case_setup import EulerRiemannCase
 from src.solver_options import SolverOptions
-from src.boundary import BoundaryConditions
+from src.euler_equations import EulerEquations
+
 
 # --- Logger Setup ---
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -55,131 +54,24 @@ def setup_mesh_and_scatter(comm):
 
     if rank == 0:
         logger.info("Initializing and reading mesh on rank 0...")
-        global_mesh = CoreMesh()
-        global_mesh.read_gmsh("data/euler_mesh.msh")
+        global_mesh = PolyMesh().from_gmsh("data/euler_mesh.msh")
         global_mesh.analyze_mesh()
 
         logger.info(f"Partitioning mesh into {size} parts...")
-        parts = partition_mesh(global_mesh, n_parts=size, method="metis")
+        parts = partition_mesh(global_mesh, size, method="metis")
+        local_meshes_list = MeshPartitionManager.create_local_meshes(
+            global_mesh, cell_partitions=parts
+        )
         global_mesh.plot(
             "results/mesh_global.png", parts, show_nodes=False, show_cells=False
         )
-
-        local_meshes_list = create_local_meshes(global_mesh, n_parts=size)
 
     # Distribute the mesh to all processes
     logger.info(f"Rank {rank}: Receiving scattered local mesh...")
     mesh = comm.scatter(local_meshes_list, root=0)
     mesh.plot(f"results/mesh_rank_{rank}.png", show_nodes=False, show_cells=False)
-    comm.Barrier()
 
     return global_mesh, mesh
-
-
-def reconstruct_and_visualize(
-    global_mesh: CoreMesh, mesh: LocalMesh, history, dt_history, comm
-):
-    """
-    Gathers simulation data from all processes and performs visualization on rank 0.
-
-    Args:
-        global_mesh (CoreMesh): The complete mesh, required on rank 0.
-        mesh (LocalMesh): The local mesh object for the current rank.
-        history (list): A list of the conservative state vectors over time for the local mesh.
-        dt_history (list): A list of the time steps (dt) used in the simulation.
-        comm (MPI.Comm): The MPI communicator.
-    """
-    rank = comm.Get_rank()
-
-    # Gather all histories and local meshes on rank 0
-    logger.info(f"Rank {rank}: Gathering results for visualization.")
-    all_histories = comm.gather(history, root=0)
-    all_local_meshes = comm.gather(mesh, root=0)
-
-    if rank == 0:
-        logger.info("Reconstructing global data and visualizing on rank 0...")
-        if not all_histories or not all_local_meshes:
-            logger.warning("No data received on rank 0 for visualization.")
-            return
-
-        # --- Reconstruct Global Data ---
-        num_time_steps = len(all_histories[0])
-        num_vars = all_histories[0][0].shape[1]
-        num_global_cells = len(global_mesh.cell_centroids)
-        global_history = []
-
-        for t in range(num_time_steps):
-            U_global = np.zeros((num_global_cells, num_vars))
-            for i, (rank_history, local_mesh) in enumerate(
-                zip(all_histories, all_local_meshes)
-            ):
-                local_U = rank_history[t]
-                if hasattr(local_mesh, "l2g_cells"):
-                    global_indices = local_mesh.l2g_cells[: local_mesh.num_owned_cells]
-                    U_global[global_indices] = local_U[: local_mesh.num_owned_cells]
-                else:
-                    logger.warning(
-                        "`local_mesh.l2g_cells` not found. "
-                        "Visualization may be incorrect."
-                    )
-            global_history.append(U_global)
-
-        # --- Visualize ---
-        logger.info("Creating animation of the results...")
-        create_animation(global_mesh, global_history, dt_history, variable_to_plot=0)
-
-        logger.info("Plotting final state...")
-        for k in range(num_vars):
-            plot_simulation_step(
-                global_mesh,
-                global_history[-1],
-                "Final State",
-                variable_to_plot=k,
-                output_dir="results",
-            )
-
-
-def run_fvm_solver(comm, global_mesh, mesh):
-    """
-    Sets up and runs the FVM solver for the given mesh and conditions.
-
-    Args:
-        comm (MPI.Comm): The MPI communicator.
-        global_mesh (CoreMesh or None): The full mesh object, used by rank 0 for visualization.
-        mesh (LocalMesh): The local mesh partition for the current rank.
-    """
-    rank = comm.Get_rank()
-    logger.info(f"Rank {rank}: Setting up the simulation case...")
-
-    # --- Simulation Parameters ---
-    gamma = 1.4
-    t_end = 0.25
-
-    # --- Case Setup ---
-    U_init, bc_dict = setup_case_euler(mesh, comm, gamma=gamma)
-    boundary_conditions = BoundaryConditions(bc_dict, mesh.boundary_tag_map)
-    bcs_lookup = boundary_conditions.to_lookup_array()
-    equation = EulerEquations(gamma=gamma)
-
-    # --- Solver Configuration ---
-    solver_opts = SolverOptions(
-        limiter_type="minmod",  # Options: 'barth_jespersen', 'minmod', 'superbee'
-        flux_type="roe",
-        over_relaxation=1.0,
-        cfl=0.5,
-        use_adaptive_dt=True,
-        dt_initial=1e-2,
-    )
-
-    # --- Solve ---
-    logger.info(f"Rank {rank}: Starting the FVM solver...")
-    history, dt_history = solve(
-        equation, mesh, U_init, bcs_lookup, t_end, comm, options=solver_opts
-    )
-    logger.info(f"Rank {rank}: Solver finished.")
-
-    # --- Post-process and Visualize ---
-    reconstruct_and_visualize(global_mesh, mesh, history, dt_history, comm)
 
 
 def main():
@@ -189,6 +81,12 @@ def main():
     parser = argparse.ArgumentParser(description="2D FVM Solver for Euler Equations")
     parser.add_argument(
         "--mpi-debug", action="store_true", help="Enable MPI debugging with debugpy."
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="config.yml",
+        help="Path to the configuration file.",
     )
     args, _ = parser.parse_known_args()
 
@@ -207,9 +105,25 @@ def main():
         logger.info(f"Rank {rank}: Debugger attached!")
         comm.Barrier()
 
-    # --- Run Simulation ---
+    # --- Load Configuration ---
+    options = {}
+    if rank == 0:
+        logger.info(f"Loading configuration from {args.config}...")
+        with open(args.config, "r") as f:
+            config_dict = yaml.safe_load(f)
+            options = SolverOptions.from_config(config_dict)
+    options = comm.bcast(options, root=0)
+
+    # --- Setup and Run Simulation ---
     global_mesh, local_mesh = setup_mesh_and_scatter(comm)
-    run_fvm_solver(comm, global_mesh, local_mesh)
+
+    equation = EulerEquations(gamma=options.gamma)
+
+    U0, bcs_lookup = EulerRiemannCase.setup_case(local_mesh, options.gamma)
+
+    simulation = Simulation(comm, equation, U0, bcs_lookup, options)
+
+    simulation.run(global_mesh, local_mesh)
 
     if rank == 0:
         logger.info("Simulation complete.")

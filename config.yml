@@ -1,0 +1,13 @@
+# Simulation Parameters
+t_end: 0.25
+gamma: 1.4
+
+# Solver Options
+solver_options:
+  limiter_type: "minmod" # Options: 'barth_jespersen', 'minmod', 'superbee'
+  flux_type: "roe"
+  over_relaxation: 1.0
+  dt_initial: 1e-2
+  time_integration_method: "rk2"
+  cfl: 0.5
+  use_adaptive_dt: True

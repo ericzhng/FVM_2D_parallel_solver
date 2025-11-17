@@ -6,9 +6,9 @@ class BoundaryConditions:
     Manages boundary conditions for a simulation.
     """
 
-    def __init__(self, bc_dict, boundary_tag_map):
+    def __init__(self, bc_dict, boundary_patch_map):
         self.bc_dict = bc_dict
-        self.boundary_tag_map = boundary_tag_map
+        self.boundary_patch_map = boundary_patch_map
         self.bc_map = self._create_bc_map()
 
     def _create_bc_map(self):
@@ -17,7 +17,7 @@ class BoundaryConditions:
         """
         bc_map = {}
         for name, props in self.bc_dict.items():
-            tag_id = self.boundary_tag_map.get(name.lower())
+            tag_id = self.boundary_patch_map.get(name.lower())
             if tag_id is not None:
                 bc_map[tag_id] = props
         return bc_map
@@ -46,8 +46,8 @@ class BoundaryConditions:
           are extrapolated from the interior. No specific values are needed.
         """
         max_tag = 0
-        if self.boundary_tag_map:
-            max_tag = max(self.boundary_tag_map.values())
+        if self.boundary_patch_map:
+            max_tag = max(self.boundary_patch_map.values())
 
         # Define a flexible dtype for the structured array
         bc_data_dtype = np.dtype(
