@@ -1,9 +1,10 @@
 numpy
+mpi4py
+debugpy
 scipy
 gmsh
 matplotlib
-jupyterlab
-pytest
 numba
+PyYAML
 line_profiler
 memory_profiler
