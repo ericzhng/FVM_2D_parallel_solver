@@ -39,9 +39,7 @@ class TestEulerEquations(unittest.TestCase):
         print("reference ROE flux:")
         print(flux)
 
-        flux = self.euler_equation.roe_flux_change(
-            self.q_left, self.q_right, self.normal
-        )
+        flux = self.euler_equation.roe_flux(self.q_left, self.q_right, self.normal)
         print("changed ROE flux:")
         print(flux)
 
@@ -53,9 +51,7 @@ class TestEulerEquations(unittest.TestCase):
         print("reference HLLC flux:")
         print(flux)
 
-        flux = self.euler_equation.hllc_flux_change(
-            self.q_left, self.q_right, self.normal
-        )
+        flux = self.euler_equation.hllc_flux(self.q_left, self.q_right, self.normal)
         print("changed HLLC flux:")
         print(flux)
 
