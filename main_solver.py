@@ -25,9 +25,13 @@ import debugpy
 from fvm_mesh.polymesh import PolyMesh, MeshPartitionManager, partition_mesh
 
 from src.simulation import Simulation
-from src.case_setup import EulerRiemannCase
 from src.solver_options import SolverOptions
-from equation_euler import EulerEquations
+
+from src.case_setup import EulerRiemannCase
+from src.case_setup import ShallowWaterRiemannCase
+
+from src.equation_euler import EulerEquations
+from src.equation_shallow_water import ShallowWaterEquations
 
 
 # --- Logger Setup ---

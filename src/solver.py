@@ -6,7 +6,7 @@ from mpi4py import MPI
 
 from fvm_mesh.polymesh.local_mesh import LocalMesh
 
-from equation_euler import EulerEquations
+from src.equation_euler import EulerEquations
 from src.time_step import calculate_adaptive_dt
 from src.fused_compute_residual import (
     compute_gradients_gaussian,

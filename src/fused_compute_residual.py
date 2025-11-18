@@ -2,7 +2,7 @@ import numba
 from numba import prange
 import numpy as np
 
-from equation_euler import EulerEquations
+from src.equation_euler import EulerEquations
 
 
 # --- Limiter Functions (JIT-compiled for performance) ---

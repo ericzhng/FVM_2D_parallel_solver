@@ -7,7 +7,7 @@ from mpi4py import MPI
 import numpy as np
 
 from fvm_mesh.polymesh import PolyMesh, LocalMesh
-from equation_euler import EulerEquations
+from src.equation_euler import EulerEquations
 from src.solver_options import SolverOptions
 from src.solver import solve
 from src.visualization import reconstruct_and_visualize
@@ -44,7 +44,7 @@ class Simulation:
             global_mesh (PolyMesh or None): The full mesh object, used by rank 0 for visualization.
             mesh (LocalMesh): The local mesh partition for the current rank.
         """
-        logger.info(f"Rank {self.rank}: Setting up the simulation case...")
+        # logger.info(f"Rank {self.rank}: Setting up the simulation case...")
 
         # --- Solve ---
         logger.info(f"Rank {self.rank}: Starting the FVM solver...")
