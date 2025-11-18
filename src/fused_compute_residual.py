@@ -2,7 +2,8 @@ import numba
 from numba import prange
 import numpy as np
 
-from src.equation_euler import EulerEquations
+from src.physics_model import PhysicsModel
+from src.boundary import apply_boundary_condition
 
 
 # --- Limiter Functions (JIT-compiled for performance) ---
@@ -204,9 +205,11 @@ def _compute_cell_flux(
             # Determine right state from boundary condition
             face_tag = cell_face_tags_i[j]
             bc_data = bcs_lookup[face_tag]
-            bc_type = bc_data["type"]
-            bc_value = bc_data["values"]
-            U_R = equation.apply_boundary_condition(U_L, face_normal, bc_type, bc_value)
+            bc_type = int(bc_data[0])
+            bc_value = bc_data[1:]
+            U_R = apply_boundary_condition(
+                U_L, face_normal, bc_type, bc_value, equation
+            )
 
         # Compute numerical flux
         if flux_type == "roe":
@@ -232,7 +235,7 @@ def compute_fused_residual(
     U,
     gradients,
     limiters,
-    equation: EulerEquations,
+    equation: PhysicsModel,
     bcs_lookup,
     cell_face_tags,
     flux_type,

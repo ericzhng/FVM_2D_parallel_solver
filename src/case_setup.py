@@ -64,8 +64,10 @@ class EulerRiemannCase:
             "left": {"type": "transmissive"},
             "right": {"type": "transmissive"},
         }
-        boundary_conditions = BoundaryConditions(bc_dict, mesh.boundary_patch_map)
-        bcs_lookup = boundary_conditions.to_lookup_array()
+        boundary_conditions = BoundaryConditions.from_config(
+            bc_dict, mesh.boundary_patch_map
+        )
+        bcs_lookup = boundary_conditions.to_lookup_array(n_vars=4)
 
         return U0, bcs_lookup
 
@@ -73,7 +75,7 @@ class EulerRiemannCase:
 class ShallowWaterRiemannCase:
 
     @staticmethod
-    def setup_case(mesh: PolyMesh):
+    def setup_case(mesh: PolyMesh, g: float):
         """
         Sets up the initial conditions for a 2D Riemann problem for the Shallow Water Equations.
         The domain is split into four quadrants, each with a different initial state,
@@ -116,7 +118,9 @@ class ShallowWaterRiemannCase:
             "left": {"type": "transmissive"},
             "right": {"type": "transmissive"},
         }
-        boundary_conditions = BoundaryConditions(bc_dict, mesh.boundary_patch_map)
-        bcs_lookup = boundary_conditions.to_lookup_array()
+        boundary_conditions = BoundaryConditions.from_config(
+            bc_dict, mesh.boundary_patch_map
+        )
+        bcs_lookup = boundary_conditions.to_lookup_array(n_vars=3)
 
         return U0, bcs_lookup

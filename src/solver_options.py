@@ -18,6 +18,7 @@ class SolverOptions:
     # Non-dataclass properties can be stored here using field(init=False)
     t_end: float = field(init=False)
     gamma: float = field(init=False)
+    g: float = field(init=False)
 
     def __post_init__(self):
         # This runs after the fields are set. We use it here just for illustration.
@@ -30,6 +31,7 @@ class SolverOptions:
         # 1. Extract non-dataclass parameters (t_end, gamma)
         t_end = config.get("t_end", 0.25)
         gamma = config.get("gamma", 1.4)
+        g = config.get("g", 9.806)
         # 2. Get the solver_options sub-dictionary, or use an empty dict
         solver_config = config.get("solver_options", {})
 
@@ -40,5 +42,6 @@ class SolverOptions:
         # 4. Manually set the non-dataclass properties
         instance.t_end = t_end
         instance.gamma = gamma
+        instance.g = g
 
         return instance

@@ -1,87 +1,119 @@
 import numpy as np
+from numba import njit
+from src.physics_model import PhysicsModel
+
+# --- Numba-friendly integer constants for BC types ---
+TRANSMISSIVE = 0
+INLET = 1
+OUTLET = 2
+WALL = 3
 
 
 class BoundaryConditions:
     """
-    Manages boundary conditions for a simulation.
+    Manages boundary conditions by mapping boundary names from the mesh
+    to the properties defined in the configuration file.
     """
 
-    def __init__(self, bc_dict, boundary_patch_map):
-        self.bc_dict = bc_dict
-        self.boundary_patch_map = boundary_patch_map
-        self.bc_map = self._create_bc_map()
+    def __init__(self, bc_map):
+        self.bc_map = bc_map
 
-    def _create_bc_map(self):
+    @classmethod
+    def from_config(cls, bc_config, boundary_patch_map):
         """
-        Creates a mapping from boundary tag ID to boundary condition properties.
+        Factory method to create a BoundaryConditions instance from a config dict.
         """
         bc_map = {}
-        for name, props in self.bc_dict.items():
-            tag_id = self.boundary_patch_map.get(name.lower())
+        for name, props in bc_config.items():
+            tag_id = boundary_patch_map.get(name.lower())
             if tag_id is not None:
                 bc_map[tag_id] = props
-        return bc_map
+        return cls(bc_map)
 
-    def to_lookup_array(self):
+    def to_lookup_array(self, n_vars):
         """
         Converts the boundary conditions to a Numba-compatible lookup array.
 
-        This method creates a structured numpy array that can be easily accessed
-        within Numba-jitted functions. Each element in the array corresponds to a
-        boundary tag and contains the boundary condition type and associated values.
-
-        The supported boundary condition types and their values are:
-        - 'inlet': Specifies fixed values for density, velocity components, and pressure.
-            - values[0]: rho (density)
-            - values[1]: u (x-velocity)
-            - values[2]: v (y-velocity)
-            - values[3]: p (pressure)
-        - 'outlet': Specifies a fixed pressure at the outlet. Other variables are
-          typically extrapolated from the interior.
-            - values[3]: p (pressure)
-        - 'wall': Represents a solid wall. Can be slip or no-slip. For Euler equations,
-          slip walls are typical.
-            - values[0]: 1.0 for slip wall, 0.0 for no-slip wall.
-        - 'transmissive': A non-reflective boundary condition where flow properties
-          are extrapolated from the interior. No specific values are needed.
+        This creates a 2D numpy array where each row corresponds to a boundary tag.
+        - Column 0: Integer code for the boundary condition type.
+        - Columns 1 to n_vars+1: Values associated with the boundary condition.
         """
-        max_tag = 0
-        if self.boundary_patch_map:
-            max_tag = max(self.boundary_patch_map.values())
+        max_tag = max(self.bc_map.keys()) if self.bc_map else 0
+        # Shape: (max_tag + 1, 1 (for type) + n_vars (for values))
+        lookup_array = np.zeros((max_tag + 1, 1 + n_vars))
 
-        # Define a flexible dtype for the structured array
-        bc_data_dtype = np.dtype(
-            [
-                ("type", "U20"),  # String for type
-                ("values", (np.float64, 4)),  # Array of 4 floats for values
-            ]
-        )
+        for tag_id, props in self.bc_map.items():
+            bc_type_str = props.get("type", "transmissive")
+            values = np.zeros(n_vars)
 
-        bcs_lookup = np.empty(max_tag + 1, dtype=bc_data_dtype)
+            if bc_type_str == "inlet":
+                bc_type_int = INLET
+                # For inlet, all primitive variables are specified
+                if "rho" in props:
+                    values[0] = props["rho"]
+                if "u" in props:
+                    values[1] = props["u"]
+                if "v" in props:
+                    values[2] = props["v"]
+                if "p" in props and n_vars > 3:
+                    values[3] = props["p"]
+                if "h" in props:  # For shallow water
+                    values[0] = props["h"]
 
-        for i in range(max_tag + 1):
-            bc_props = self.bc_map.get(i)
-            if bc_props:
-                bc_type = bc_props.get("type", "transmissive")
-                values = np.zeros(4)
-                if bc_type == "inlet":
-                    values[0] = bc_props.get("rho", 1.0)
-                    values[1] = bc_props.get("u", 0.0)
-                    values[2] = bc_props.get("v", 0.0)
-                    values[3] = bc_props.get("p", 1.0)
-                elif bc_type == "outlet":
-                    # For an outlet, pressure is typically specified
-                    values[3] = bc_props.get("p", 1.0)
-                elif bc_type == "wall":
-                    # For an Euler solver, slip walls are the default
-                    values[0] = 1.0 if bc_props.get("slip", True) else 0.0
-                elif bc_type == "transmissive":
-                    # No specific values needed, properties are extrapolated
-                    pass
+            elif bc_type_str == "outlet":
+                bc_type_int = OUTLET
+                # For outlet, typically pressure (Euler) or height (Shallow Water) is specified
+                if "p" in props and n_vars > 3:
+                    values[3] = props["p"]
+                if "h" in props:
+                    values[0] = props["h"]
 
-                bcs_lookup[i] = (bc_type, values)
-            else:
-                # Default to transmissive if a tag is not in the bc_dict
-                bcs_lookup[i] = ("transmissive", np.zeros(4))
+            elif bc_type_str == "wall":
+                bc_type_int = WALL
+                # Value indicates slip (1.0) or no-slip (0.0)
+                values[0] = 1.0 if props.get("slip", True) else 0.0
 
-        return bcs_lookup
+            else:  # transmissive
+                bc_type_int = TRANSMISSIVE
+
+            lookup_array[tag_id, 0] = bc_type_int
+            lookup_array[tag_id, 1 : 1 + n_vars] = values
+
+        return lookup_array
+
+
+@njit
+def apply_boundary_condition(
+    U_inside: np.ndarray,
+    normal: np.ndarray,
+    bc_type: int,
+    bc_value: np.ndarray,
+    equation: PhysicsModel,
+) -> np.ndarray:
+    """
+    Applies a boundary condition to determine the state of a ghost cell.
+
+    This function acts as a dispatcher, calling the appropriate method on the
+    physics model based on the integer boundary condition type.
+
+    Args:
+        U_inside (np.ndarray): Conservative state vector of the interior cell.
+        normal (np.ndarray): The outward-pointing normal vector of the boundary face.
+        bc_type (int): The integer code for the boundary condition type.
+        bc_value (np.ndarray): The value(s) associated with the boundary condition.
+        equation (PhysicsModel): The physics model object.
+
+    Returns:
+        np.ndarray: The conservative state vector of the ghost cell.
+    """
+    if bc_type == TRANSMISSIVE:
+        return equation.apply_transmissive_bc(U_inside)
+    elif bc_type == INLET:
+        return equation.apply_inlet_bc(bc_value)
+    elif bc_type == OUTLET:
+        return equation.apply_outlet_bc(U_inside, bc_value)
+    elif bc_type == WALL:
+        return equation.apply_wall_bc(U_inside, normal, bc_value)
+    else:
+        # Default to transmissive for any unknown boundary condition types
+        return equation.apply_transmissive_bc(U_inside)

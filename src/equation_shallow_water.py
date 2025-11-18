@@ -2,9 +2,11 @@ import numpy as np
 from numba import float64
 from numba.experimental import jitclass
 
+from src.physics_model import PhysicsModel
 
-@jitclass([("gamma", float64)])
-class ShallowWaterEquations:
+
+@jitclass([("g", float64)])
+class ShallowWaterEquations(PhysicsModel):
     """
     Represents the 2D Shallow Water Equations for incompressible fluid flow with a free surface.
 
@@ -16,7 +18,7 @@ class ShallowWaterEquations:
         g (float): The acceleration due to gravity.
     """
 
-    def __init__(self, g=9.81):
+    def __init__(self, g: float = 9.81):
         """
         Initializes the ShallowWaterEquations object.
 
@@ -105,77 +107,51 @@ class ShallowWaterEquations:
         # Max eigenvalue = |velocity| + c
         return np.sqrt(u**2 + v**2) + c
 
-    def apply_boundary_condition(self, U_inside, normal, bc_type, bc_value):
+    def apply_transmissive_bc(self, U_inside: np.ndarray) -> np.ndarray:
         """
-        Computes the state of a ghost cell based on a boundary condition.
-
-        Args:
-            U_inside (np.ndarray): Conservative state vector of the interior cell.
-            normal (np.ndarray): The outward-pointing normal vector of the boundary face.
-            bc_type (int): The type of the boundary condition (0=transmissive, 1=inlet, 2=outlet, 3=wall).
-            bc_value (np.ndarray): The value(s) associated with the boundary condition.
-
-        Returns:
-            np.ndarray: The conservative state vector of the ghost cell.
+        Applies a transmissive (zero-gradient) boundary condition.
         """
-        # Convert interior state to primitive variables for easier manipulation
+        return U_inside
+
+    def apply_inlet_bc(self, bc_value: np.ndarray) -> np.ndarray:
+        """
+        Applies an inlet boundary condition with specified primitive values.
+        """
+        h_bc, u_bc, v_bc = bc_value
+        P_ghost = np.array([h_bc, u_bc, v_bc])
+        return self._prim_to_cons(P_ghost)
+
+    def apply_outlet_bc(self, U_inside: np.ndarray, bc_value: np.ndarray) -> np.ndarray:
+        """
+        Applies an outlet boundary condition, typically with a specified height.
+        """
+        U_outside = U_inside.copy()
+        U_outside[0] = bc_value[0]
+        return self._prim_to_cons(U_outside)
+
+    def apply_wall_bc(
+        self, U_inside: np.ndarray, normal: np.ndarray, bc_value: np.ndarray
+    ) -> np.ndarray:
+        """
+        Applies a wall boundary condition (slip or no-slip).
+        """
         h_in, u_in, v_in = self._cons_to_prim(U_inside)
-        c = np.sqrt(self.g * h_in)
 
-        if bc_type == 0:  # transmissive
-            # Ghost cell state is the same as the interior cell state.
-            # This is a zero-gradient condition, used for supersonic outlets
-            # or far-field boundaries.
-            return U_inside
+        vn_in = u_in * normal[0] + v_in * normal[1]
+        vt_in = u_in * -normal[1] + v_in * normal[0]
 
-        elif bc_type == 1:  # inlet
-            # All primitive variables are specified at the inlet.
-            # This is typical for a supersonic inlet (Dirichlet condition).
-            h_bc, u_bc, v_bc = bc_value
-            P_ghost = np.array([h_bc, u_bc, v_bc])
-            return self._prim_to_cons(P_ghost)
-
-        elif bc_type == 2:  # outlet
-            # Pressure is specified at the outlet, other variables are extrapolated
-            # from the interior. This is typical for a subsonic outlet.
-            U_outside = U_inside.copy()
-            U_outside[0] = bc_value[0]
-            return self._prim_to_cons(U_outside)
-
-        elif bc_type == 3:  # wall
-            h_in, u_in, v_in = self._cons_to_prim(U_inside)
-
-            # Decompose velocity into normal and tangential components
-            vn_in = u_in * normal[0] + v_in * normal[1]
-            vt_in = u_in * -normal[1] + v_in * normal[0]
-
-            # Reflect the normal velocity, keep tangential velocity
-            vn_ghost = -vn_in
+        vn_ghost = -vn_in
+        is_slip = bc_value[0] == 1.0
+        if is_slip:
             vt_ghost = vt_in
-
-            is_slip = bc_value[0] == 1.0
-            if is_slip:
-                # For a slip wall (inviscid flow), tangential velocity is conserved.
-                vt_ghost = vt_in
-            else:
-                # For a no-slip wall (viscous flow), tangential velocity is zero.
-                vt_ghost = 0.0
-
-            # Recompose the ghost velocity vector from the new normal and tangential components
-            # u = vn*nx - vt*ny
-            # v = vn*ny + vt*nx
-            u_ghost = vn_ghost * normal[0] - vt_ghost * normal[1]
-            v_ghost = vn_ghost * normal[1] + vt_ghost * normal[0]
-
-            # Create the primitive state for the ghost cell
-            P_ghost = np.array([h_in, u_ghost, v_ghost])
-
-            # Convert back to conservative variables
-            return self._prim_to_cons(P_ghost)
-
         else:
-            # Default to transmissive for any unknown boundary condition types.
-            return U_inside
+            vt_ghost = 0.0
+
+        u_ghost = vn_ghost * normal[0] - vt_ghost * normal[1]
+        v_ghost = vn_ghost * normal[1] + vt_ghost * normal[0]
+
+        P_ghost = np.array([h_in, u_ghost, v_ghost])
+        return self._prim_to_cons(P_ghost)
 
     def hllc_flux(self, U_L, U_R, normal):
         """

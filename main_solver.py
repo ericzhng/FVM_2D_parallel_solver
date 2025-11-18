@@ -58,7 +58,7 @@ def setup_mesh_and_scatter(comm):
 
     if rank == 0:
         logger.info("Initializing and reading mesh on rank 0...")
-        global_mesh = PolyMesh().from_gmsh("data/euler_mesh.msh")
+        global_mesh = PolyMesh().from_gmsh("data/shallow_water_mesh.msh")
         global_mesh.analyze_mesh()
 
         logger.info(f"Partitioning mesh into {size} parts...")
@@ -92,6 +92,13 @@ def main():
         default="config.yml",
         help="Path to the configuration file.",
     )
+    parser.add_argument(
+        "--equation",
+        type=str,
+        default="shallow_water",
+        choices=["euler", "shallow_water"],
+        help="The equation to solve.",
+    )
     args, _ = parser.parse_known_args()
 
     # --- Initialize MPI ---
@@ -121,9 +128,14 @@ def main():
     # --- Setup and Run Simulation ---
     global_mesh, local_mesh = setup_mesh_and_scatter(comm)
 
-    equation = EulerEquations(gamma=options.gamma)
-
-    U0, bcs_lookup = EulerRiemannCase.setup_case(local_mesh, options.gamma)
+    if args.equation == "euler":
+        equation = EulerEquations(gamma=options.gamma)
+        U0, bcs_lookup = EulerRiemannCase.setup_case(local_mesh, options.gamma)
+    elif args.equation == "shallow_water":
+        equation = ShallowWaterEquations(g=options.g)
+        U0, bcs_lookup = ShallowWaterRiemannCase.setup_case(local_mesh, options.g)
+    else:
+        raise ValueError(f"Unknown equation type: {args.equation}")
 
     simulation = Simulation(comm, equation, U0, bcs_lookup, options)
 

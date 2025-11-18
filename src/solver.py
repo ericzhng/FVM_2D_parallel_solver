@@ -6,7 +6,8 @@ from mpi4py import MPI
 
 from fvm_mesh.polymesh.local_mesh import LocalMesh
 
-from src.equation_euler import EulerEquations
+from src.solver_options import SolverOptions
+from src.physics_model import PhysicsModel
 from src.time_step import calculate_adaptive_dt
 from src.fused_compute_residual import (
     compute_gradients_gaussian,
@@ -14,13 +15,12 @@ from src.fused_compute_residual import (
     compute_fused_residual,
     LIMITERS,
 )
-from src.solver_options import SolverOptions
 
 
 def _compute_residual(
     mesh: LocalMesh,
     U: np.ndarray,
-    equation: EulerEquations,
+    equation: PhysicsModel,
     bcs_lookup,
     options: SolverOptions,
 ) -> np.ndarray:
@@ -111,7 +111,7 @@ def exchange_halo_data(mesh: LocalMesh, U: np.ndarray, comm: MPI.Comm) -> None:
 
 
 def solve(
-    equation: EulerEquations,
+    equation: PhysicsModel,
     mesh: LocalMesh,
     U: np.ndarray,
     bcs_lookup,

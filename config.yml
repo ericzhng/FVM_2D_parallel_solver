@@ -1,7 +1,7 @@
 # Simulation Parameters
-t_end: 0.25
+t_end: 10.25
 gamma: 1.4
-g: 9.8106
+g: 9.806
 
 # Solver Options
 solver_options:

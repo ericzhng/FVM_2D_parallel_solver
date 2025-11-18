@@ -7,7 +7,7 @@ from mpi4py import MPI
 import numpy as np
 
 from fvm_mesh.polymesh import PolyMesh, LocalMesh
-from src.equation_euler import EulerEquations
+from src.physics_model import PhysicsModel
 from src.solver_options import SolverOptions
 from src.solver import solve
 from src.visualization import reconstruct_and_visualize
@@ -23,7 +23,7 @@ class Simulation:
     def __init__(
         self,
         comm: MPI.Comm,
-        equation: EulerEquations,
+        equation: PhysicsModel,
         U0: np.ndarray,
         bcs_lookup: np.ndarray,
         options: SolverOptions,

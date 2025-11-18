@@ -2,9 +2,12 @@ import numpy as np
 from mpi4py import MPI
 
 from src.solver_options import SolverOptions
+from src.physics_model import PhysicsModel
 
 
-def calculate_adaptive_dt(mesh, U, equation, options: SolverOptions, comm):
+def calculate_adaptive_dt(
+    mesh, U, equation: PhysicsModel, options: SolverOptions, comm
+):
     """
     Calculates the adaptive time step for the simulation based on the CFL condition.
 
