@@ -9,7 +9,7 @@ os.environ["NUMBA_DISABLE_JIT"] = "1"
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.euler_equations import EulerEquations
+from equation_euler import EulerEquations
 
 
 class TestEulerEquations(unittest.TestCase):

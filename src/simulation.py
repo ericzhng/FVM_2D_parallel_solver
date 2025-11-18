@@ -7,7 +7,7 @@ from mpi4py import MPI
 import numpy as np
 
 from fvm_mesh.polymesh import PolyMesh, LocalMesh
-from src.euler_equations import EulerEquations
+from equation_euler import EulerEquations
 from src.solver_options import SolverOptions
 from src.solver import solve
 from src.visualization import reconstruct_and_visualize

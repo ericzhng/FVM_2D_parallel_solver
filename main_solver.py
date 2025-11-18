@@ -27,7 +27,7 @@ from fvm_mesh.polymesh import PolyMesh, MeshPartitionManager, partition_mesh
 from src.simulation import Simulation
 from src.case_setup import EulerRiemannCase
 from src.solver_options import SolverOptions
-from src.euler_equations import EulerEquations
+from equation_euler import EulerEquations
 
 
 # --- Logger Setup ---

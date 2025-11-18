@@ -2,7 +2,7 @@ import numba
 from numba import prange
 import numpy as np
 
-from src.euler_equations import EulerEquations
+from equation_euler import EulerEquations
 
 
 # --- Limiter Functions (JIT-compiled for performance) ---
@@ -126,7 +126,11 @@ def compute_limiters(
             for k in range(nvars):
                 diff = U_face_extrap[k] - U_i[k]
                 if abs(diff) > 1e-9:
-                    r = (U_max[k] - U_i[k]) / diff if diff > 0 else (U_min[k] - U_i[k]) / diff
+                    r = (
+                        (U_max[k] - U_i[k]) / diff
+                        if diff > 0
+                        else (U_min[k] - U_i[k]) / diff
+                    )
                     limiters[i, k] = min(limiters[i, k], limiter_func(r))
     return limiters
 
@@ -150,6 +154,31 @@ def _compute_cell_flux(
 ):
     """
     Computes the sum of fluxes for a single cell using pre-computed limiters.
+
+    The residual represents the rate of change of the conservative variables
+    in each cell, and is calculated as the sum of fluxes across all faces
+    of the cell, divided by the cell volume.
+
+    This function implements a second-order MUSCL-Hancock scheme for spatial
+    reconstruction, which involves:
+    1. Gradient computation at cell centroids.
+    2. Slope limiting to prevent spurious oscillations.
+    3. Reconstruction of cell-face values from cell-centroid values.
+    4. Numerical flux calculation at each face using a Riemann solver (Roe or HLLC).
+    5. Compute the summation of fluxes.
+
+    Args:
+        mesh (Mesh): The mesh object.
+        U (np.ndarray): The array of conservative state vectors for all cells.
+        equation: The equation object (e.g., EulerEquations).
+        boundary_conditions (dict): A dictionary defining the boundary conditions.
+        limiter_type (str): The type of slope limiter to use.
+        flux_type (str): The type of numerical flux (Riemann solver) to use.
+        over_relaxation (float, optional): Over-relaxation factor for gradient
+                                         computation. Defaults to 1.2.
+
+    Returns:
+        np.ndarray: The residual array for all cells.
     """
     flux_sum = np.zeros(nvars)
     for j, neighbor_idx in enumerate(cell_neighbors_i):
