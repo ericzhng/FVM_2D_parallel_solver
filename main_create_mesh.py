@@ -7,15 +7,23 @@ import gmsh
 def main():
     """Create a rectangular mesh and save it to a Gmsh file."""
     # Define geometry parameters
-    length = 1.0  # Length of the rectangle in the x-direction
-    height = 1.0  # Height of the rectangle in the y-direction
+
+    # length = 1.0
+    # height = 1.0
+    # dx = 0.01
+    # mesh_filename = "euler_mesh.msh"
+
+    length = 100.0
+    height = 100.0
+    dx = 1
+    mesh_filename = "shallow_water_mesh.msh"
 
     # Create geometry
     gmsh.initialize()
     gmsh.model.add("test_polygon")
 
     geom = Geometry()
-    surface_tag = geom.rectangle(length, height, mesh_size=0.01)
+    surface_tag = geom.rectangle(length, height, mesh_size=dx)
 
     # synchronize the geo kernel to the model so model-level API can access entities
     gmsh.model.geo.synchronize()
@@ -56,8 +64,8 @@ def main():
     # Generate mesh
     output_dir = "data"
     mesher = MeshGenerator(surface_tags=surface_tag, output_dir=output_dir)
-    mesh_filename = "euler_mesh.msh"
-    mesh_params = {surface_tag: {"mesh_type": "structured", "char_length": 0.01}}
+
+    mesh_params = {surface_tag: {"mesh_type": "structured", "char_length": dx}}
     mesher.generate(
         mesh_params=mesh_params,
         filename=mesh_filename,

@@ -68,3 +68,55 @@ class EulerRiemannCase:
         bcs_lookup = boundary_conditions.to_lookup_array()
 
         return U0, bcs_lookup
+
+
+class ShallowWaterRiemannCase:
+
+    @staticmethod
+    def setup_case(mesh: PolyMesh):
+        """
+        Sets up the initial conditions for a 2D Riemann problem for the Shallow Water Equations.
+        The domain is split into four quadrants, each with a different initial state,
+        based on the cell center coordinates (x, y).
+        """
+        # Define primitive variables for the four regions (h, u, v)
+        # These values are illustrative and can be adjusted for specific test cases.
+        h_vals = np.array([2.0, 1.0, 1.5, 0.5])  # Water height
+        u_vals = np.array([0.0, 0.5, -0.5, 0.0])  # Velocity in x-direction
+        v_vals = np.array([0.0, 0.0, 0.0, 0.5])  # Velocity in y-direction
+
+        # Get cell centroid coordinates
+        x = mesh.cell_centroids[:, 0]
+        y = mesh.cell_centroids[:, 1]
+
+        # Create boolean masks for each quadrant (assuming a domain from 0 to 1 in x and y)
+        reg1 = (x >= 50) & (y >= 50)  # Top-right
+        reg2 = (x < 50) & (y >= 50)  # Top-left
+        reg3 = (x < 50) & (y < 50)  # Bottom-left
+        reg4 = (x >= 50) & (y < 50)  # Bottom-right
+
+        # Initialize arrays for primitive variables for all cells
+
+        # Use masks to set initial conditions for all cells in a vectorized way
+        h = h_vals[0] * reg1 + h_vals[1] * reg2 + h_vals[2] * reg3 + h_vals[3] * reg4
+        u = u_vals[0] * reg1 + u_vals[1] * reg2 + u_vals[2] * reg3 + u_vals[3] * reg4
+        v = v_vals[0] * reg1 + v_vals[1] * reg2 + v_vals[2] * reg3 + v_vals[3] * reg4
+
+        # Convert primitive variables to conservative variables [h, hu, hv]
+        hu = h * u
+        hv = h * v
+
+        # Assemble the state vector U = [h, hu, hv]
+        U0 = np.vstack([h, hu, hv]).T
+
+        # Define boundary conditions - using transmissive (outlet) for all boundaries
+        bc_dict: Dict[str, Dict[str, Union[str, float, bool]]] = {
+            "top": {"type": "transmissive"},
+            "bottom": {"type": "transmissive"},
+            "left": {"type": "transmissive"},
+            "right": {"type": "transmissive"},
+        }
+        boundary_conditions = BoundaryConditions(bc_dict, mesh.boundary_patch_map)
+        bcs_lookup = boundary_conditions.to_lookup_array()
+
+        return U0, bcs_lookup
