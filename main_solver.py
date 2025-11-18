@@ -58,7 +58,7 @@ def setup_mesh_and_scatter(comm):
 
     if rank == 0:
         logger.info("Initializing and reading mesh on rank 0...")
-        global_mesh = PolyMesh().from_gmsh("data/shallow_water_mesh.msh")
+        global_mesh = PolyMesh().from_gmsh("data/euler_mesh.msh")
         global_mesh.analyze_mesh()
 
         logger.info(f"Partitioning mesh into {size} parts...")
@@ -95,7 +95,7 @@ def main():
     parser.add_argument(
         "--equation",
         type=str,
-        default="shallow_water",
+        default="euler",
         choices=["euler", "shallow_water"],
         help="The equation to solve.",
     )
