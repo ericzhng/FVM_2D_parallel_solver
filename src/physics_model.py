@@ -11,6 +11,19 @@ class PhysicsModel:
     condition application.
     """
 
+    def _compute_flux(self, U, normal) -> np.ndarray:
+        """
+        Calculates the physical flux across a face with a given normal.
+
+        Args:
+            U (np.ndarray): Conservative state vector.
+            normal (np.ndarray): Normal vector of the face.
+
+        Returns:
+            np.ndarray: The flux vector normal to the face.
+        """
+        raise NotImplementedError
+
     def max_eigenvalue(self, U: np.ndarray) -> float:
         """
         Calculates the maximum wave speed (eigenvalue) for a given cell state.
@@ -77,7 +90,9 @@ class PhysicsModel:
         """
         raise NotImplementedError
 
-    def hllc_flux(self, U_L: np.ndarray, U_R: np.ndarray, normal: np.ndarray) -> np.ndarray:
+    def hllc_flux(
+        self, U_L: np.ndarray, U_R: np.ndarray, normal: np.ndarray
+    ) -> np.ndarray:
         """
         Computes the numerical flux using the HLLC Riemann solver.
 
@@ -91,7 +106,9 @@ class PhysicsModel:
         """
         raise NotImplementedError
 
-    def roe_flux(self, U_L: np.ndarray, U_R: np.ndarray, normal: np.ndarray) -> np.ndarray:
+    def roe_flux(
+        self, U_L: np.ndarray, U_R: np.ndarray, normal: np.ndarray
+    ) -> np.ndarray:
         """
         Computes the numerical flux using the Roe approximate Riemann solver.
 

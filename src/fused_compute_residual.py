@@ -137,6 +137,13 @@ def compute_limiters(
 
 
 @numba.njit
+def _compute_central_difference_flux(U_L, U_R, face_normal, equation):
+    F_L = equation._compute_flux(U_L, face_normal)
+    F_R = equation._compute_flux(U_R, face_normal)
+    return 0.5 * (F_L + F_R)
+
+
+@numba.njit
 def _compute_cell_flux(
     i,
     nvars,
@@ -214,8 +221,12 @@ def _compute_cell_flux(
         # Compute numerical flux
         if flux_type == "roe":
             flux = equation.roe_flux(U_L, U_R, face_normal)
-        else:  # HLLC
+        elif flux_type == "hllc":
             flux = equation.hllc_flux(U_L, U_R, face_normal)
+        elif flux_type == "central_difference":
+            flux = _compute_central_difference_flux(U_L, U_R, face_normal, equation)
+        else:
+            raise ValueError(f"Unsupported flux type: {flux_type}")
 
         flux_sum += flux * face_area
 

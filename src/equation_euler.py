@@ -154,7 +154,7 @@ class EulerEquations(PhysicsModel):
         P_ghost = np.array([rho_ghost, u_ghost, v_ghost, p_ghost])
         return self._prim_to_cons(P_ghost)
 
-    def hllc_flux(self, U_L, U_R, normal):
+    def hllc_flux(self, U_L, U_R, normal) -> np.ndarray:
         """
         Computes the numerical flux using the HLLC (Harten-Lax-van Leer-Contact) Riemann solver.
 
@@ -251,7 +251,7 @@ class EulerEquations(PhysicsModel):
             # All waves move to the left
             return FR
 
-    def roe_flux(self, U_L, U_R, normal):
+    def roe_flux(self, U_L, U_R, normal) -> np.ndarray:
         """
         Computes the numerical flux using the Roe approximate Riemann solver.
 
