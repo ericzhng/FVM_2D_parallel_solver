@@ -1,14 +1,53 @@
-# Simulation Parameters
-t_end: 0.25
-gamma: 1.4
-g: 9.806
+# ==============================================================================
+# FVM 2D Parallel Solver Configuration
+# ==============================================================================
 
+# ------------------------------------------------------------------------------
+# Input Settings
+# ------------------------------------------------------------------------------
+input:
+  mesh_file: "data/euler_mesh.msh" # Path to the Gmsh .msh file
+
+# ------------------------------------------------------------------------------
+# Simulation Settings
+# ------------------------------------------------------------------------------
+simulation:
+  t_end: 0.25 # Final simulation time
+  equation: euler # Options: "euler", "shallow_water"
+  case: riemann # Options: "riemann", ... (future cases)
+
+# ------------------------------------------------------------------------------
+# Physics Model Parameters
+# ------------------------------------------------------------------------------
+physics:
+  euler:
+    gamma: 1.4 # Ratio of specific heats (for Euler equations)
+  shallow_water:
+    g: 9.806 # Acceleration due to gravity (for Shallow Water equations)
+
+# ------------------------------------------------------------------------------
 # Solver Options
-solver_options:
-  limiter_type: "minmod" # Options: 'barth_jespersen', 'minmod', 'superbee'
-  flux_type: "roe"
-  over_relaxation: 1.0
-  dt_initial: 1e-2
-  time_integration_method: "rk2"
-  cfl: 0.5
-  use_adaptive_dt: True
+# ------------------------------------------------------------------------------
+solver:
+  # Time Integration Settings
+  time_integration:
+    method: "rk2" # Time integration scheme. Options: "euler", "rk2"
+    cfl: 0.5 # Courant-Friedrichs-Lewy (CFL) number for stability
+    use_adaptive_dt: true # Use adaptive time stepping based on CFL condition
+    dt_initial: 1.0e-4 # Initial time step (if not adaptive)
+
+  # Spatial Discretization and Flux Calculation
+  spatial:
+    flux_type: "roe" # Numerical flux scheme. Options: "roe", "hllc", "central_difference"
+    limiter_type:
+      "minmod" # Slope limiter for second-order reconstruction.
+      # Options: "barth_jespersen", "minmod", "superbee"
+    gradient_over_relaxation: 1.0 # Over-relaxation factor for gradient computation
+
+# ------------------------------------------------------------------------------
+# I/O and Visualization
+# ------------------------------------------------------------------------------
+output:
+  format: "vtk" # Output format for visualization. Options: "vtk", "tecplot"
+  interval: 100 # Output frequency (e.g., every 100 time steps)
+  filename_prefix: "solution" # Prefix for output file names

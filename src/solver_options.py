@@ -6,42 +6,63 @@ from typing import Dict, Any
 class SolverOptions:
     """A data class to hold all solver configuration options."""
 
-    # Dataclass Fields (The ones you want to initialize automatically)
-    limiter_type: str = "barth_jespersen"
-    flux_type: str = "roe"
-    over_relaxation: float = 1.2
-    use_adaptive_dt: bool = True
-    cfl: float = 0.5
-    dt_initial: float = 0.01
+    # Time integration
     time_integration_method: str = "rk2"
+    cfl: float = 0.5
+    use_adaptive_dt: bool = True
+    dt_initial: float = 1.0e-4
 
-    # Non-dataclass properties can be stored here using field(init=False)
+    # Spatial discretization
+    flux_type: str = "roe"
+    limiter_type: str = "minmod"
+    gradient_over_relaxation: float = 1.0
+
+    # I/O
+    output_format: str = "vtk"
+    output_interval: int = 100
+    output_filename_prefix: str = "solution"
+
+    # Simulation settings that are not solver-specific but useful to have here
+    mesh_file: str = field(init=False)
     t_end: float = field(init=False)
+    equation: str = field(init=False)
+    case: str = field(init=False)
     gamma: float = field(init=False)
     g: float = field(init=False)
 
-    def __post_init__(self):
-        # This runs after the fields are set. We use it here just for illustration.
-        print(f"SolverOptions correctly read")
 
     @classmethod
     def from_config(cls, config: Dict[str, Any]):
-        """Creates a SolverOptions instance from a configuration dictionary."""
+        """Creates a SolverOptions instance from a nested configuration dictionary."""
+        input_config = config.get("input", {})
+        sim_config = config.get("simulation", {})
+        physics_config = config.get("physics", {})
+        solver_config = config.get("solver", {})
+        time_config = solver_config.get("time_integration", {})
+        spatial_config = solver_config.get("spatial", {})
+        output_config = config.get("output", {})
 
-        # 1. Extract non-dataclass parameters (t_end, gamma)
-        t_end = config.get("t_end", 0.25)
-        gamma = config.get("gamma", 1.4)
-        g = config.get("g", 9.806)
-        # 2. Get the solver_options sub-dictionary, or use an empty dict
-        solver_config = config.get("solver_options", {})
+        # Create an instance with values from the config, falling back to defaults
+        instance = cls(
+            time_integration_method=time_config.get("method", "rk2"),
+            cfl=time_config.get("cfl", 0.5),
+            use_adaptive_dt=time_config.get("use_adaptive_dt", True),
+            dt_initial=time_config.get("dt_initial", 1.0e-4),
+            flux_type=spatial_config.get("flux_type", "roe"),
+            limiter_type=spatial_config.get("limiter_type", "minmod"),
+            gradient_over_relaxation=spatial_config.get("gradient_over_relaxation", 1.0),
+            output_format=output_config.get("format", "vtk"),
+            output_interval=output_config.get("interval", 100),
+            output_filename_prefix=output_config.get("filename_prefix", "solution"),
+        )
 
-        # 3. Create the instance using dictionary unpacking (The Fix!)
-        # Any key in solver_config matching a dataclass field name is set automatically.
-        instance = cls(**solver_config)
-
-        # 4. Manually set the non-dataclass properties
-        instance.t_end = t_end
-        instance.gamma = gamma
-        instance.g = g
+        # Manually set non-solver-specific properties
+        instance.mesh_file = input_config.get("mesh_file", "data/euler_mesh.msh")
+        instance.t_end = sim_config.get("t_end", 0.25)
+        instance.equation = sim_config.get("equation", "euler")
+        instance.case = sim_config.get("case", "riemann")
+        
+        instance.gamma = physics_config.get("euler", {}).get("gamma", 1.4)
+        instance.g = physics_config.get("shallow_water", {}).get("g", 9.806)
 
         return instance

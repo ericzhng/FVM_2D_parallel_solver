@@ -40,7 +40,7 @@ def _compute_residual(
         mesh.face_to_centroid_distances,
         mesh.cell_face_midpoints,
         U,
-        options.over_relaxation,
+        options.gradient_over_relaxation,
     )
 
     # --- 2. Slope Limiting (Parallel) ---
