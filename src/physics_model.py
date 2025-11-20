@@ -11,6 +11,16 @@ class PhysicsModel:
     condition application.
     """
 
+    @property
+    def variable_names(self) -> list[str]:
+        """
+        Returns the list of variable names for the physics model.
+
+        Returns:
+            list[str]: List of variable names.
+        """
+        return [""]
+
     def _compute_flux(self, U, normal) -> np.ndarray:
         """
         Calculates the physical flux across a face with a given normal.

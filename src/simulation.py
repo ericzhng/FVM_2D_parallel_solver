@@ -12,6 +12,7 @@ from src.solver_options import SolverOptions
 from src.solver import solve
 from src.visualization import reconstruct_and_visualize
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,6 +51,7 @@ class Simulation:
         logger.info(f"Rank {self.rank}: Starting the FVM solver...")
         history, dt_history = solve(
             self.equation,
+            global_mesh,
             mesh,
             self.U0,
             self.bcs_lookup,

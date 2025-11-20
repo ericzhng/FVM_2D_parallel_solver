@@ -1,6 +1,7 @@
 import numpy as np
-from numba import float64
+from numba import float64, types
 from numba.experimental import jitclass
+from numba.typed import List
 
 from src.physics_model import PhysicsModel
 
@@ -26,6 +27,16 @@ class EulerEquations(PhysicsModel):
             gamma (float, optional): The ratio of specific heats. Defaults to 1.4.
         """
         self.gamma = gamma
+
+    @property
+    def variable_names(self) -> list[str]:
+        """
+        Returns the list of variable names for the physics model.
+
+        Returns:
+            list[str]: List of variable names.
+        """
+        return ["rho", "rho_u", "rho_v", "E"]
 
     def _cons_to_prim(self, U):
         """

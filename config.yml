@@ -12,7 +12,7 @@ input:
 # Simulation Settings
 # ------------------------------------------------------------------------------
 simulation:
-  t_end: 0.25 # Final simulation time
+  t_end: 0.5 # Final simulation time
   equation: euler # Options: "euler", "shallow_water"
   case: riemann # Options: "riemann", ... (future cases)
 
@@ -34,11 +34,11 @@ solver:
     method: "rk2" # Time integration scheme. Options: "euler", "rk2"
     cfl: 0.5 # Courant-Friedrichs-Lewy (CFL) number for stability
     use_adaptive_dt: true # Use adaptive time stepping based on CFL condition
-    dt_initial: 1.0e-4 # Initial time step (if not adaptive)
+    dt_initial: 1.0e-3 # Initial time step (if not adaptive)
 
   # Spatial Discretization and Flux Calculation
   spatial:
-    flux_type: "roe" # Numerical flux scheme. Options: "roe", "hllc", "central_difference"
+    flux_type: "hllc" # Numerical flux scheme. Options: "roe", "hllc", "central_difference"
     limiter_type:
       "minmod" # Slope limiter for second-order reconstruction.
       # Options: "barth_jespersen", "minmod", "superbee"
@@ -48,6 +48,6 @@ solver:
 # I/O and Visualization
 # ------------------------------------------------------------------------------
 output:
-  format: "vtk" # Output format for visualization. Options: "vtk", "tecplot"
-  interval: 100 # Output frequency (e.g., every 100 time steps)
+  format: "tecplot" # Output format for visualization. Options: "vtk", "tecplot"
+  interval: 10 # Output frequency (e.g., every 10 time steps)
   filename_prefix: "solution" # Prefix for output file names

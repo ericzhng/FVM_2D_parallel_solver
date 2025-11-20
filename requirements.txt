@@ -8,3 +8,5 @@ numba
 PyYAML
 line_profiler
 memory_profiler
+meshio
+vtk

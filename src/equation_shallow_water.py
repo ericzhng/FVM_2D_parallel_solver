@@ -27,6 +27,16 @@ class ShallowWaterEquations(PhysicsModel):
         """
         self.g = g
 
+    @property
+    def variable_names(self) -> list[str]:
+        """
+        Returns the list of variable names for the physics model.
+
+        Returns:
+            list[str]: List of variable names.
+        """
+        return ["h", "hu", "hv"]
+
     def _cons_to_prim(self, U):
         """
         Converts a single conservative state vector to primitive variables.
