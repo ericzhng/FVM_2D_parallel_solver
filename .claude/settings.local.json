@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(conda run:*)",
+      "Bash(dir \"C:\\\\Users\\\\ZhangHui\\\\.conda\\\\envs\\\\env_api\\\\Lib\\\\site-packages\\\\fvm_mesh\\\\dll\\\\metis.dll\")",
+      "Bash(dir:*)"
+    ]
+  }
+}
